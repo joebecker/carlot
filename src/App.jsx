@@ -24,6 +24,7 @@ const CarLot = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [favorites, setFavorites] = useState(new Set());
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedCar, setSelectedCar] = useState(null);
   const [viewingCarId, setViewingCarId] = useState(null);
   
@@ -508,6 +509,313 @@ const CarLot = () => {
               </button>
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  // User Profile Modal Component
+  const UserProfileModal = () => {
+    const [profileData, setProfileData] = useState({
+      firstName: '',
+      lastName: '',
+      phone: '',
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+    const [activeProfileTab, setActiveProfileTab] = useState('info'); // 'info', 'listings', 'password'
+
+    const handleUpdateProfile = async () => {
+      if (!supabase || !user) return;
+
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            first_name: profileData.firstName,
+            last_name: profileData.lastName,
+            phone: profileData.phone,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+
+        if (error) throw error;
+
+        showNotification('success', '✅ Profile updated successfully!');
+      } catch (err) {
+        showNotification('error', `Error: ${err.message}`);
+      }
+    };
+
+    const handleChangePassword = async () => {
+      if (profileData.newPassword !== profileData.confirmPassword) {
+        showNotification('error', '❌ New passwords do not match!');
+        return;
+      }
+
+      if (profileData.newPassword.length < 6) {
+        showNotification('error', '❌ Password must be at least 6 characters!');
+        return;
+      }
+
+      if (!supabase) return;
+
+      try {
+        const { error } = await supabase.auth.updateUser({
+          password: profileData.newPassword
+        });
+
+        if (error) throw error;
+
+        showNotification('success', '🔐 Password changed successfully!');
+        setProfileData({ ...profileData, currentPassword: '', newPassword: '', confirmPassword: '' });
+      } catch (err) {
+        showNotification('error', `Error: ${err.message}`);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-bold">My Profile</h3>
+                <p className="text-sm text-gray-600 mt-1">{user?.email}</p>
+              </div>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveProfileTab('info')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeProfileTab === 'info'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Personal Info
+              </button>
+              <button
+                onClick={() => setActiveProfileTab('listings')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeProfileTab === 'listings'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                My Listings
+              </button>
+              <button
+                onClick={() => setActiveProfileTab('password')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeProfileTab === 'password'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Change Password
+              </button>
+            </nav>
+          </div>
+
+          <div className="p-6">
+            {/* Personal Info Tab */}
+            {activeProfileTab === 'info' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.firstName}
+                      onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.lastName}
+                      onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={user?.email || ''}
+                    disabled
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={handleUpdateProfile}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* My Listings Tab */}
+            {activeProfileTab === 'listings' && (
+              <div>
+                <div className="mb-4 flex justify-between items-center">
+                  <h3 className="text-lg font-semibold text-gray-900">Your Listings</h3>
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      setCurrentView('dashboard');
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
+                  >
+                    + Add New Listing
+                  </button>
+                </div>
+
+                {myListings.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500 mb-4">You haven't listed any vehicles yet.</p>
+                    <button
+                      onClick={() => {
+                        setShowProfileModal(false);
+                        setCurrentView('dashboard');
+                      }}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    >
+                      List Your First Car
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {myListings.map((listing) => (
+                      <div key={listing.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-semibold text-gray-900">
+                              {listing.year} {listing.make} {listing.model}
+                            </h4>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {formatMileage(listing.mileage)} miles • {formatPrice(listing.price)}
+                            </p>
+                            <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                              <span>👁️ {listing.views} views</span>
+                              <span>💬 {listing.inquiries} inquiries</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button className="text-blue-600 hover:text-blue-700">
+                              <Edit size={18} />
+                            </button>
+                            <button className="text-red-600 hover:text-red-700">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Change Password Tab */}
+            {activeProfileTab === 'password' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={profileData.newPassword}
+                    onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={profileData.confirmPassword}
+                    onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800">
+                    💡 Password must be at least 6 characters long.
+                  </p>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={handleChangePassword}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Change Password
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-gray-200 p-6 bg-gray-50">
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 font-medium flex items-center justify-center gap-2"
+            >
+              <LogOut size={18} />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1767,21 +2075,29 @@ const CarLot = () => {
             </nav>
 
             <div className="flex items-center space-x-4">
-              {user ? (
-                <>
-                  <div className="hidden md:flex items-center gap-2 text-gray-700">
-                    <User size={20} className="text-blue-600" />
-                    <span className="text-sm font-medium">{user.email}</span>
+              {isMasterAdmin ? (
+                // Master Admin - Show Logout
+                <button 
+                  onClick={handleLogout}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-lg transition"
+                >
+                  <LogOut size={18} />
+                  Logout
+                </button>
+              ) : user ? (
+                // Regular User - Show Profile Icon
+                <button
+                  onClick={() => setShowProfileModal(true)}
+                  className="hidden md:flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                  title="My Profile"
+                >
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <User size={18} className="text-white" />
                   </div>
-                  <button 
-                    onClick={handleLogout}
-                    className="hidden md:flex items-center gap-2 px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-lg transition"
-                  >
-                    <LogOut size={18} />
-                    Logout
-                  </button>
-                </>
+                  <span className="text-sm font-medium">{user.email?.split('@')[0]}</span>
+                </button>
               ) : (
+                // Not Logged In - Show Sign In
                 <button 
                   onClick={() => {
                     setAuthMode('login');
@@ -1834,13 +2150,17 @@ const CarLot = () => {
                   <button onClick={() => { setCurrentView('admin'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Admin</button>
                 )}
                 <a href="#" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
-                {user ? (
-                  <>
-                    <div className="pt-3 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 mb-2">{user.email}</p>
-                      <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="text-left text-red-600 hover:text-red-700 font-medium">Logout</button>
-                    </div>
-                  </>
+                {isMasterAdmin ? (
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-600 mb-2">Master Admin</p>
+                    <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="text-left text-red-600 hover:text-red-700 font-medium">Logout</button>
+                  </div>
+                ) : user ? (
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-600 mb-2">{user.email}</p>
+                    <button onClick={() => { setShowProfileModal(true); setMobileMenuOpen(false); }} className="text-left text-blue-600 hover:text-blue-700 font-medium mb-2">My Profile</button>
+                    <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="text-left text-red-600 hover:text-red-700 font-medium">Logout</button>
+                  </div>
                 ) : (
                   <button onClick={() => { setAuthMode('login'); setShowAuthModal(true); setMobileMenuOpen(false); }} className="text-left text-blue-600 hover:text-blue-700 font-medium">Sign In</button>
                 )}
@@ -2037,6 +2357,9 @@ const CarLot = () => {
 
       {/* Auth Modal */}
       {showAuthModal && <AuthModal />}
+
+      {/* Profile Modal */}
+      {showProfileModal && user && !isMasterAdmin && <UserProfileModal />}
 
       {/* Contact Modal */}
       {showContactModal && selectedCar && (
