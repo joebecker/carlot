@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare } from 'lucide-react';
 
 const CarLot = () => {
-  const [currentView, setCurrentView] = useState('marketplace'); // marketplace, dashboard, financing
+  const [currentView, setCurrentView] = useState('marketplace'); // marketplace, dashboard, financing, cardetail
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [priceRange, setPriceRange] = useState('all');
@@ -10,6 +10,7 @@ const CarLot = () => {
   const [favorites, setFavorites] = useState(new Set());
   const [showContactModal, setShowContactModal] = useState(false);
   const [selectedCar, setSelectedCar] = useState(null);
+  const [viewingCarId, setViewingCarId] = useState(null);
   
   // Financing calculator states
   const [loanAmount, setLoanAmount] = useState(30000);
@@ -28,12 +29,21 @@ const CarLot = () => {
       mileage: 8500,
       location: 'San Francisco, CA',
       image: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&q=80',
+        'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&q=80',
+        'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800&q=80'
+      ],
       fuel: 'Electric',
+      transmission: 'Automatic',
+      color: 'Pearl White',
+      vin: '5YJ3E1EA1PF123456',
       seller: 'Premium Auto',
       sellerEmail: 'contact@premiumauto.com',
       sellerPhone: '(555) 123-4567',
       featured: true,
-      description: 'Excellent condition, one owner, full service history'
+      description: 'Excellent condition, one owner, full service history. This Tesla Model 3 is loaded with premium features including autopilot, premium audio, and white interior. Regularly serviced at Tesla service center.',
+      features: ['Autopilot', 'Premium Audio', 'Glass Roof', 'White Interior', 'Heated Seats', 'Navigation', 'Backup Camera', 'Bluetooth']
     },
     {
       id: 2,
@@ -44,12 +54,20 @@ const CarLot = () => {
       mileage: 15200,
       location: 'Los Angeles, CA',
       image: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1590362891991-f776e747a588?w=800&q=80',
+        'https://images.unsplash.com/photo-1590362891991-f776e747a588?w=800&q=80'
+      ],
       fuel: 'Gasoline',
+      transmission: 'CVT Automatic',
+      color: 'Sonic Gray',
+      vin: '2HGFC2F59NH123456',
       seller: 'City Motors',
       sellerEmail: 'sales@citymotors.com',
       sellerPhone: '(555) 234-5678',
       featured: false,
-      description: 'Great fuel economy, clean title, no accidents'
+      description: 'Great fuel economy, clean title, no accidents. Well maintained with complete service records. Perfect commuter car with excellent reliability.',
+      features: ['Lane Departure Warning', 'Adaptive Cruise Control', 'Apple CarPlay', 'Android Auto', 'Backup Camera', 'Bluetooth', 'USB Ports']
     },
     {
       id: 3,
@@ -60,12 +78,21 @@ const CarLot = () => {
       mileage: 5000,
       location: 'Austin, TX',
       image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&q=80',
+        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&q=80',
+        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=800&q=80'
+      ],
       fuel: 'Gasoline',
+      transmission: '10-Speed Automatic',
+      color: 'Agate Black',
+      vin: '1FTFW1E50PFA12345',
       seller: 'Truck World',
       sellerEmail: 'info@truckworld.com',
       sellerPhone: '(555) 345-6789',
       featured: true,
-      description: 'Lifted, premium wheels, towing package'
+      description: 'Lifted, premium wheels, towing package. This F-150 has been professionally lifted and comes with a comprehensive towing package. Perfect for work or weekend adventures.',
+      features: ['4WD', 'Towing Package', 'Lifted Suspension', 'Premium Wheels', 'Tonneau Cover', 'Bed Liner', 'Running Boards', 'LED Lights', 'Navigation']
     },
     {
       id: 4,
@@ -76,12 +103,20 @@ const CarLot = () => {
       mileage: 22000,
       location: 'Miami, FL',
       image: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=800&q=80',
+        'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=800&q=80'
+      ],
       fuel: 'Gasoline',
+      transmission: '8-Speed Automatic',
+      color: 'Alpine White',
+      vin: 'WBA8E9C51LK123456',
       seller: 'Luxury Auto Group',
       sellerEmail: 'luxury@autogroup.com',
       sellerPhone: '(555) 456-7890',
       featured: false,
-      description: 'Premium package, navigation, leather interior'
+      description: 'Premium package, navigation, leather interior. Meticulously maintained with full BMW service history. Drives like new with all the luxury features you expect from BMW.',
+      features: ['Premium Package', 'Navigation', 'Leather Seats', 'Sunroof', 'Heated Seats', 'Parking Sensors', 'Keyless Entry', 'Dual Climate']
     },
     {
       id: 5,
@@ -92,12 +127,20 @@ const CarLot = () => {
       mileage: 12000,
       location: 'Seattle, WA',
       image: 'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=800&q=80',
+        'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=800&q=80'
+      ],
       fuel: 'Hybrid',
+      transmission: 'CVT',
+      color: 'Blueprint',
+      vin: '2T3P1RFV8PC123456',
       seller: 'Pacific Motors',
       sellerEmail: 'contact@pacificmotors.com',
       sellerPhone: '(555) 567-8901',
       featured: false,
-      description: 'Hybrid efficiency, AWD, safety features'
+      description: 'Hybrid efficiency, AWD, safety features. Get amazing fuel economy without sacrificing power or capability. Perfect family SUV with advanced safety features.',
+      features: ['AWD', 'Hybrid System', 'Toyota Safety Sense', 'Blind Spot Monitor', 'Rear Cross Traffic', 'Apple CarPlay', 'Roof Rails', 'Power Liftgate']
     },
     {
       id: 6,
@@ -108,12 +151,21 @@ const CarLot = () => {
       mileage: 3500,
       location: 'New York, NY',
       image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=80',
+        'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=80',
+        'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=80'
+      ],
       fuel: 'Gasoline',
+      transmission: '7-Speed PDK',
+      color: 'Guards Red',
+      vin: 'WP0AA2A99NS123456',
       seller: 'Elite Autos',
       sellerEmail: 'elite@autos.com',
       sellerPhone: '(555) 678-9012',
       featured: true,
-      description: 'Immaculate condition, sports package, carbon fiber'
+      description: 'Immaculate condition, sports package, carbon fiber. This 911 is a true driver\'s car with every performance option. Garage kept and meticulously maintained.',
+      features: ['Sport Chrono', 'Carbon Fiber Package', 'Sport Exhaust', 'PASM', 'Porsche Communication', 'Sport Seats Plus', 'LED Headlights', 'Bose Audio']
     }
   ];
 
@@ -579,6 +631,219 @@ const CarLot = () => {
     );
   };
 
+  // Car Detail Page Component
+  const CarDetailPage = () => {
+    const car = listings.find(c => c.id === viewingCarId);
+    
+    if (!car) {
+      return (
+        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
+          <p>Car not found</p>
+          <button 
+            onClick={() => setCurrentView('marketplace')}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Back to Listings
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back Button */}
+        <button 
+          onClick={() => setCurrentView('marketplace')}
+          className="mb-6 flex items-center text-blue-600 hover:text-blue-700 font-medium"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Listings
+        </button>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Images and Details */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Main Image */}
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <img 
+                src={car.image} 
+                alt={`${car.year} ${car.make} ${car.model}`}
+                className="w-full h-96 object-cover"
+              />
+              
+              {/* Thumbnail Images */}
+              <div className="p-4 flex gap-2 overflow-x-auto">
+                {car.images?.map((img, idx) => (
+                  <img 
+                    key={idx}
+                    src={img}
+                    alt={`View ${idx + 1}`}
+                    className="w-24 h-24 object-cover rounded cursor-pointer hover:opacity-75"
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Vehicle Details */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Vehicle Details</h2>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Make</p>
+                  <p className="font-semibold text-gray-900">{car.make}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Model</p>
+                  <p className="font-semibold text-gray-900">{car.model}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Year</p>
+                  <p className="font-semibold text-gray-900">{car.year}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Mileage</p>
+                  <p className="font-semibold text-gray-900">{formatMileage(car.mileage)} miles</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Fuel Type</p>
+                  <p className="font-semibold text-gray-900">{car.fuel}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Transmission</p>
+                  <p className="font-semibold text-gray-900">{car.transmission}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Color</p>
+                  <p className="font-semibold text-gray-900">{car.color}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">VIN</p>
+                  <p className="font-semibold text-gray-900 text-sm">{car.vin}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
+              <p className="text-gray-700 leading-relaxed">{car.description}</p>
+            </div>
+
+            {/* Features */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Features</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {car.features?.map((feature, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-700">{feature}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Location</h2>
+              <div className="flex items-center gap-2 text-gray-700">
+                <MapPin size={20} className="text-blue-600" />
+                <span>{car.location}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Price and Contact */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-24 space-y-4">
+              {/* Price Card */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-500 mb-1">Price</p>
+                  <p className="text-4xl font-bold text-blue-600">{formatPrice(car.price)}</p>
+                </div>
+
+                {car.featured && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800 font-medium">⭐ Featured Listing</p>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setSelectedCar(car);
+                      setShowContactModal(true);
+                    }}
+                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
+                  >
+                    Contact Seller
+                  </button>
+                  
+                  <button
+                    onClick={() => toggleFavorite(car.id)}
+                    className="w-full px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Heart 
+                      size={20} 
+                      className={favorites.has(car.id) ? "fill-blue-600" : ""}
+                    />
+                    {favorites.has(car.id) ? 'Saved' : 'Save Listing'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setLoanAmount(car.price);
+                      setCurrentView('financing');
+                    }}
+                    className="w-full px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Calculator size={20} />
+                    Calculate Payment
+                  </button>
+                </div>
+              </div>
+
+              {/* Seller Info */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Seller Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Seller</p>
+                    <p className="font-semibold text-gray-900">{car.seller}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Phone size={18} className="text-blue-600" />
+                    <span>{car.sellerPhone}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Mail size={18} className="text-blue-600" />
+                    <span className="text-sm">{car.sellerEmail}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Safety Tips */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-2">Safety Tips</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Meet in a public place</li>
+                  <li>• Inspect vehicle thoroughly</li>
+                  <li>• Request vehicle history report</li>
+                  <li>• Never wire money</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -651,6 +916,7 @@ const CarLot = () => {
       {/* Conditional View Rendering */}
       {currentView === 'dashboard' && <SellerDashboard />}
       {currentView === 'financing' && <FinancingCalculator />}
+      {currentView === 'cardetail' && <CarDetailPage />}
       
       {currentView === 'marketplace' && (
         <>
@@ -777,7 +1043,13 @@ const CarLot = () => {
                     </div>
 
                     <div className="flex gap-2">
-                      <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition">
+                      <button 
+                        onClick={() => {
+                          setViewingCarId(car.id);
+                          setCurrentView('cardetail');
+                        }}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
+                      >
                         View Details
                       </button>
                       <button 
