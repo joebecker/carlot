@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
-import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const CarLot = () => {
+  // Auth states
+  const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
+  const [loading, setLoading] = useState(true);
+  
   const [currentView, setCurrentView] = useState('marketplace'); // marketplace, dashboard, financing, cardetail
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -17,6 +29,92 @@ const CarLot = () => {
   const [downPayment, setDownPayment] = useState(5000);
   const [interestRate, setInterestRate] = useState(6.5);
   const [loanTerm, setLoanTerm] = useState(60);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Auth functions
+  const handleSignUp = async (email, password) => {
+    if (!supabase) {
+      alert('Database not configured. Please add Supabase credentials.');
+      return;
+    }
+    
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    
+    if (error) {
+      alert(error.message);
+    } else {
+      alert('Check your email for the confirmation link!');
+      setShowAuthModal(false);
+    }
+  };
+
+  const handleLogin = async (email, password) => {
+    if (!supabase) {
+      alert('Database not configured. Please add Supabase credentials.');
+      return;
+    }
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    if (error) {
+      alert(error.message);
+    } else {
+      setShowAuthModal(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!supabase) return;
+    
+    await supabase.auth.signOut();
+    setCurrentView('marketplace');
+  };
+
+  const handleForgotPassword = async (email) => {
+    if (!supabase) {
+      alert('Database not configured. Please add Supabase credentials.');
+      return;
+    }
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    
+    if (error) {
+      alert(error.message);
+    } else {
+      alert('Check your email for the password reset link!');
+    }
+  };
+
 
   // Sample car listings - in production, this would come from a database
   const listings = [
@@ -247,6 +345,143 @@ const CarLot = () => {
   const monthlyPayment = calculateMonthlyPayment();
   const totalPayment = monthlyPayment * loanTerm;
   const totalInterest = totalPayment - (loanAmount - downPayment);
+
+  // Auth Modal Component
+  const AuthModal = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      
+      if (authMode === 'signup') {
+        if (password !== confirmPassword) {
+          alert('Passwords do not match!');
+          return;
+        }
+        handleSignUp(email, password);
+      } else {
+        if (showForgotPassword) {
+          handleForgotPassword(email);
+          setShowForgotPassword(false);
+        } else {
+          handleLogin(email, password);
+        }
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-bold">
+              {showForgotPassword ? 'Reset Password' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+            </h3>
+            <button onClick={() => setShowAuthModal(false)} className="text-gray-500 hover:text-gray-700">
+              <X size={24} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+
+            {!showForgotPassword && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                {authMode === 'signup' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            <button
+              type="submit"
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
+            >
+              {showForgotPassword ? 'Send Reset Link' : authMode === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
+
+          {!showForgotPassword && (
+            <>
+              {authMode === 'login' && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600">
+                  {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+                  <button
+                    onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {authMode === 'login' ? 'Sign up' : 'Sign in'}
+                  </button>
+                </p>
+              </div>
+            </>
+          )}
+
+          {showForgotPassword && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setShowForgotPassword(false)}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
+                Back to sign in
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // Contact Modal Component
   const ContactModal = ({ car, onClose }) => {
@@ -865,7 +1100,14 @@ const CarLot = () => {
                 Buy
               </button>
               <button 
-                onClick={() => setCurrentView('dashboard')}
+                onClick={() => {
+                  if (user) {
+                    setCurrentView('dashboard');
+                  } else {
+                    setAuthMode('signup');
+                    setShowAuthModal(true);
+                  }
+                }}
                 className={`font-medium ${currentView === 'dashboard' ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'}`}
               >
                 Sell
@@ -880,11 +1122,41 @@ const CarLot = () => {
             </nav>
 
             <div className="flex items-center space-x-4">
-              <button className="hidden md:block px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition">
-                Sign In
-              </button>
+              {user ? (
+                <>
+                  <div className="hidden md:flex items-center gap-2 text-gray-700">
+                    <User size={20} className="text-blue-600" />
+                    <span className="text-sm font-medium">{user.email}</span>
+                  </div>
+                  <button 
+                    onClick={handleLogout}
+                    className="hidden md:flex items-center gap-2 px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-lg transition"
+                  >
+                    <LogOut size={18} />
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setAuthMode('login');
+                    setShowAuthModal(true);
+                  }}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                >
+                  <LogIn size={18} />
+                  Sign In
+                </button>
+              )}
               <button 
-                onClick={() => setCurrentView('dashboard')}
+                onClick={() => {
+                  if (user) {
+                    setCurrentView('dashboard');
+                  } else {
+                    setAuthMode('signup');
+                    setShowAuthModal(true);
+                  }
+                }}
                 className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
               >
                 List Your Car
@@ -903,10 +1175,27 @@ const CarLot = () => {
             <div className="md:hidden py-4 border-t">
               <nav className="flex flex-col space-y-3">
                 <button onClick={() => { setCurrentView('marketplace'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Buy</button>
-                <button onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Sell</button>
+                <button onClick={() => { 
+                  if (user) {
+                    setCurrentView('dashboard');
+                  } else {
+                    setAuthMode('signup');
+                    setShowAuthModal(true);
+                  }
+                  setMobileMenuOpen(false); 
+                }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Sell</button>
                 <button onClick={() => { setCurrentView('financing'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Finance</button>
                 <a href="#" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
-                <a href="#" className="text-gray-700 hover:text-blue-600 font-medium">Sign In</a>
+                {user ? (
+                  <>
+                    <div className="pt-3 border-t border-gray-200">
+                      <p className="text-sm text-gray-600 mb-2">{user.email}</p>
+                      <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="text-left text-red-600 hover:text-red-700 font-medium">Logout</button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => { setAuthMode('login'); setShowAuthModal(true); setMobileMenuOpen(false); }} className="text-left text-blue-600 hover:text-blue-700 font-medium">Sign In</button>
+                )}
               </nav>
             </div>
           )}
@@ -1079,7 +1368,14 @@ const CarLot = () => {
                 <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to Sell Your Car?</h2>
                 <p className="text-xl text-gray-300 mb-8">List your vehicle and reach thousands of buyers</p>
                 <button 
-                  onClick={() => setCurrentView('dashboard')}
+                  onClick={() => {
+                    if (user) {
+                      setCurrentView('dashboard');
+                    } else {
+                      setAuthMode('signup');
+                      setShowAuthModal(true);
+                    }
+                  }}
                   className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-lg font-medium transition"
                 >
                   Get Started - It's Free
@@ -1090,9 +1386,22 @@ const CarLot = () => {
         </>
       )}
 
+      {/* Auth Modal */}
+      {showAuthModal && <AuthModal />}
+
       {/* Contact Modal */}
       {showContactModal && selectedCar && (
         <ContactModal car={selectedCar} onClose={() => setShowContactModal(false)} />
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
       )}
 
       {/* Footer */}
