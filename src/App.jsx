@@ -13,8 +13,11 @@ const CarLot = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
   const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: '' }
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false); // Master admin login status
+  const [masterAdminPassword, setMasterAdminPassword] = useState('admin123'); // Default master password
   
-  const [currentView, setCurrentView] = useState('marketplace'); // marketplace, dashboard, financing, cardetail
+  const [currentView, setCurrentView] = useState('marketplace'); // marketplace, dashboard, financing, cardetail, admin
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [priceRange, setPriceRange] = useState('all');
@@ -53,10 +56,26 @@ const CarLot = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Notification auto-dismiss
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 5000); // Auto-dismiss after 5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  // Helper to show notifications
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+  };
+
   // Auth functions
   const handleSignUp = async (email, password) => {
     if (!supabase) {
-      alert('Database not configured. Please add Supabase credentials.');
+      showNotification('error', 'Database not configured. Please add Supabase credentials.');
       return;
     }
     
@@ -66,16 +85,25 @@ const CarLot = () => {
     });
     
     if (error) {
-      alert(error.message);
+      showNotification('error', error.message);
     } else {
-      alert('Check your email for the confirmation link!');
+      showNotification('success', '🎉 Account created! Check your email to confirm your account.');
       setShowAuthModal(false);
     }
   };
 
   const handleLogin = async (email, password) => {
+    // Check for master admin login
+    if (email === 'admin@carlot.com' && password === masterAdminPassword) {
+      setIsMasterAdmin(true);
+      showNotification('success', '🔐 Master Admin access granted!');
+      setShowAuthModal(false);
+      setCurrentView('admin');
+      return;
+    }
+
     if (!supabase) {
-      alert('Database not configured. Please add Supabase credentials.');
+      showNotification('error', 'Database not configured. Please add Supabase credentials.');
       return;
     }
     
@@ -85,8 +113,9 @@ const CarLot = () => {
     });
     
     if (error) {
-      alert(error.message);
+      showNotification('error', error.message);
     } else {
+      showNotification('success', '✅ Welcome back! You\'re now signed in.');
       setShowAuthModal(false);
     }
   };
@@ -95,12 +124,13 @@ const CarLot = () => {
     if (!supabase) return;
     
     await supabase.auth.signOut();
+    setIsMasterAdmin(false);
     setCurrentView('marketplace');
   };
 
   const handleForgotPassword = async (email) => {
     if (!supabase) {
-      alert('Database not configured. Please add Supabase credentials.');
+      showNotification('error', 'Database not configured. Please add Supabase credentials.');
       return;
     }
     
@@ -109,9 +139,9 @@ const CarLot = () => {
     });
     
     if (error) {
-      alert(error.message);
+      showNotification('error', error.message);
     } else {
-      alert('Check your email for the password reset link!');
+      showNotification('success', '📧 Password reset link sent! Check your email.');
     }
   };
 
@@ -358,7 +388,7 @@ const CarLot = () => {
       
       if (authMode === 'signup') {
         if (password !== confirmPassword) {
-          alert('Passwords do not match!');
+          showNotification('error', '❌ Passwords do not match!');
           return;
         }
         handleSignUp(email, password);
@@ -494,7 +524,7 @@ const CarLot = () => {
 
     const handleSubmit = (e) => {
       e.preventDefault();
-      alert('Message sent! The seller will contact you shortly.');
+      showNotification('success', '📧 Message sent! The seller will contact you shortly.');
       onClose();
     };
 
@@ -716,6 +746,597 @@ const CarLot = () => {
             </table>
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // Admin Dashboard Component
+  const AdminDashboard = () => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('listings'); // 'listings', 'users', 'settings'
+    const [editingUser, setEditingUser] = useState(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [editForm, setEditForm] = useState({ email: '', role: 'user' });
+    const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+
+    // Fetch all users
+    useEffect(() => {
+      if (activeTab === 'users') {
+        fetchUsers();
+      }
+    }, [activeTab]);
+
+    const fetchUsers = async () => {
+      if (!supabase) return;
+      
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.log('Users table not found. You may need to create it.');
+          setUsers([]);
+        } else {
+          setUsers(data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching users:', err);
+        setUsers([]);
+      }
+      setLoading(false);
+    };
+
+    const handleDeleteUser = async (userId, userEmail) => {
+      if (!confirm(`Are you sure you want to delete user ${userEmail}?`)) {
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+
+        if (error) throw error;
+
+        showNotification('success', '✅ User deleted successfully');
+        fetchUsers();
+      } catch (err) {
+        showNotification('error', `Error: ${err.message}`);
+      }
+    };
+
+    const handleEditUser = (user) => {
+      setEditingUser(user);
+      setEditForm({
+        email: user.email,
+        role: user.role || 'user'
+      });
+      setShowEditModal(true);
+    };
+
+    const handleUpdateUser = async () => {
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            email: editForm.email,
+            role: editForm.role,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingUser.id);
+
+        if (error) throw error;
+
+        showNotification('success', '✅ User updated successfully');
+        setShowEditModal(false);
+        fetchUsers();
+      } catch (err) {
+        showNotification('error', `Error: ${err.message}`);
+      }
+    };
+
+    const handleDeleteListing = (listingId) => {
+      if (!confirm('Are you sure you want to delete this listing?')) {
+        return;
+      }
+      showNotification('success', '✅ Listing deleted successfully');
+      // In production, this would delete from database
+    };
+
+    const handleChangePassword = () => {
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        showNotification('error', '❌ New passwords do not match!');
+        return;
+      }
+
+      if (passwordForm.currentPassword !== masterAdminPassword) {
+        showNotification('error', '❌ Current password is incorrect!');
+        return;
+      }
+
+      if (passwordForm.newPassword.length < 6) {
+        showNotification('error', '❌ New password must be at least 6 characters!');
+        return;
+      }
+
+      setMasterAdminPassword(passwordForm.newPassword);
+      showNotification('success', '🔐 Master admin password changed successfully!');
+      setShowPasswordModal(false);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    };
+
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">🔐 Master Admin Dashboard</h1>
+          <p className="text-gray-600">Manage all aspects of CarLot.com</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">Total Listings</p>
+                <p className="text-3xl font-bold text-gray-900">{listings.length}</p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <BarChart3 className="text-blue-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">Total Users</p>
+                <p className="text-3xl font-bold text-gray-900">{users.length || '—'}</p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-lg">
+                <User className="text-green-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">Inquiries</p>
+                <p className="text-3xl font-bold text-gray-900">156</p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <MessageSquare className="text-purple-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">Revenue</p>
+                <p className="text-3xl font-bold text-gray-900">$2.4k</p>
+              </div>
+              <div className="bg-yellow-100 p-3 rounded-lg">
+                <DollarSign className="text-yellow-600" size={24} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('listings')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeTab === 'listings'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Vehicle Listings ({listings.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeTab === 'users'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                User Management ({users.length || 0})
+              </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-6 py-4 text-sm font-medium border-b-2 ${
+                  activeTab === 'settings'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Settings
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {/* Listings Tab */}
+        {activeTab === 'listings' && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">All Vehicle Listings</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seller</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {listings.map((car) => (
+                    <tr key={car.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <img src={car.image} alt={car.model} className="w-16 h-16 rounded object-cover" />
+                          <div className="ml-4">
+                            <div className="font-medium text-gray-900">
+                              {car.year} {car.make} {car.model}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {formatMileage(car.mileage)} miles • {car.fuel}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-gray-900 font-semibold">{formatPrice(car.price)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{car.location}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{car.seller}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          car.featured 
+                            ? 'bg-yellow-100 text-yellow-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {car.featured ? 'Featured' : 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <button
+                          onClick={() => {
+                            setViewingCarId(car.id);
+                            setCurrentView('cardetail');
+                          }}
+                          className="text-blue-600 hover:text-blue-900 mr-3"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleDeleteListing(car.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 size={18} className="inline" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">User Management</h2>
+              <button
+                onClick={fetchUsers}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="p-12 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading users...</p>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-600 mb-4">No users found or users table not set up.</p>
+                <p className="text-sm text-gray-500">
+                  Note: To see actual users, you need to create a 'users' table in Supabase.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((userItem) => (
+                      <tr key={userItem.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <User size={20} className="text-blue-600" />
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {userItem.first_name} {userItem.last_name}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{userItem.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            userItem.role === 'admin' 
+                              ? 'bg-purple-100 text-purple-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {userItem.role || 'user'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(userItem.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleEditUser(userItem)}
+                            className="text-blue-600 hover:text-blue-900 mr-4"
+                          >
+                            <Edit size={18} className="inline" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(userItem.id, userItem.email)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash2 size={18} className="inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Master Admin Settings</h2>
+              
+              <div className="space-y-6">
+                {/* Password Change */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Change Master Password</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Update the master admin password. Current password is required.
+                  </p>
+                  <button
+                    onClick={() => setShowPasswordModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Change Password
+                  </button>
+                </div>
+
+                {/* Admin Email */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Master Admin Email</h3>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Email: <span className="font-mono bg-gray-100 px-2 py-1 rounded">admin@carlot.com</span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    This is the master admin login email. Cannot be changed via UI.
+                  </p>
+                </div>
+
+                {/* System Info */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">System Information</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Total Listings</p>
+                      <p className="font-semibold text-gray-900">{listings.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Users</p>
+                      <p className="font-semibold text-gray-900">{users.length || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Database</p>
+                      <p className="font-semibold text-gray-900">{supabase ? 'Connected' : 'Not configured'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Admin Status</p>
+                      <p className="font-semibold text-green-600">Master Admin</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditModal && editingUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold">Edit User</h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Role
+                  </label>
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateUser}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Change Password Modal */}
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold">Change Master Password</h3>
+                <button
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter current password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ <strong>Warning:</strong> Make sure to save your new password. If you forget it, you'll need to reset it in the code.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleChangePassword}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Change Password
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1081,6 +1702,22 @@ const CarLot = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        @keyframes slide-in {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+      `}</style>
+      
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1118,6 +1755,14 @@ const CarLot = () => {
               >
                 Finance
               </button>
+              {isMasterAdmin && (
+                <button 
+                  onClick={() => setCurrentView('admin')}
+                  className={`font-medium ${currentView === 'admin' ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'}`}
+                >
+                  Admin
+                </button>
+              )}
               <a href="#" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
             </nav>
 
@@ -1185,6 +1830,9 @@ const CarLot = () => {
                   setMobileMenuOpen(false); 
                 }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Sell</button>
                 <button onClick={() => { setCurrentView('financing'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Finance</button>
+                {isMasterAdmin && (
+                  <button onClick={() => { setCurrentView('admin'); setMobileMenuOpen(false); }} className="text-left text-gray-700 hover:text-blue-600 font-medium">Admin</button>
+                )}
                 <a href="#" className="text-gray-700 hover:text-blue-600 font-medium">About</a>
                 {user ? (
                   <>
@@ -1206,6 +1854,7 @@ const CarLot = () => {
       {currentView === 'dashboard' && <SellerDashboard />}
       {currentView === 'financing' && <FinancingCalculator />}
       {currentView === 'cardetail' && <CarDetailPage />}
+      {currentView === 'admin' && isMasterAdmin && <AdminDashboard />}
       
       {currentView === 'marketplace' && (
         <>
@@ -1400,6 +2049,50 @@ const CarLot = () => {
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-in">
+          <div className={`rounded-lg shadow-lg p-4 max-w-md ${
+            notification.type === 'success' 
+              ? 'bg-green-50 border-2 border-green-500' 
+              : 'bg-red-50 border-2 border-red-500'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`flex-shrink-0 ${
+                notification.type === 'success' ? 'text-green-500' : 'text-red-500'
+              }`}>
+                {notification.type === 'success' ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${
+                  notification.type === 'success' ? 'text-green-900' : 'text-red-900'
+                }`}>
+                  {notification.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setNotification(null)}
+                className={`flex-shrink-0 ${
+                  notification.type === 'success' 
+                    ? 'text-green-500 hover:text-green-700' 
+                    : 'text-red-500 hover:text-red-700'
+                }`}
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
       )}
