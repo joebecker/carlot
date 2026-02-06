@@ -25,6 +25,7 @@ const CarLot = () => {
   const [favorites, setFavorites] = useState(new Set());
   const [showContactModal, setShowContactModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAddListingModal, setShowAddListingModal] = useState(false);
   const [selectedCar, setSelectedCar] = useState(null);
   const [viewingCarId, setViewingCarId] = useState(null);
   
@@ -33,6 +34,156 @@ const CarLot = () => {
   const [downPayment, setDownPayment] = useState(5000);
   const [interestRate, setInterestRate] = useState(6.5);
   const [loanTerm, setLoanTerm] = useState(60);
+
+  // Vehicle data from NHTSA API
+  const [vehicleMakes, setVehicleMakes] = useState([]);
+  const [vehicleModels, setVehicleModels] = useState([]);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [isUpdatingVehicleData, setIsUpdatingVehicleData] = useState(false);
+  const [vinDecoding, setVinDecoding] = useState(false);
+
+  // Vehicle body types
+  const bodyTypes = [
+    'Sedan', 'Coupe', 'Hatchback', 'Wagon', 'Convertible',
+    'SUV', 'Crossover', 'Truck', 'Van', 'Minivan'
+  ];
+
+  // Carfax API integration (mock for now - requires paid API key)
+  const fetchCarfaxReport = async (vin) => {
+    // In production, this would call Carfax API
+    // For now, return mock data
+    return {
+      reportAvailable: true,
+      reportUrl: `https://www.carfax.com/VehicleHistory/p/Report.cfx?vin=${vin}`,
+      accidents: Math.floor(Math.random() * 3),
+      owners: Math.floor(Math.random() * 4) + 1,
+      serviceRecords: Math.floor(Math.random() * 20) + 5,
+      titleInfo: 'Clean Title',
+      lastReportedMileage: Math.floor(Math.random() * 100000) + 10000,
+    };
+  };
+
+  // Load vehicle data from localStorage on mount
+  useEffect(() => {
+    const savedMakes = localStorage.getItem('vehicleMakes');
+    const savedLastUpdated = localStorage.getItem('vehicleDataLastUpdated');
+    
+    if (savedMakes) {
+      setVehicleMakes(JSON.parse(savedMakes));
+      setLastUpdated(savedLastUpdated);
+    }
+  }, []);
+
+  // Fetch vehicle makes from NHTSA API
+  const fetchVehicleMakes = async () => {
+    setIsUpdatingVehicleData(true);
+    try {
+      const response = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/GetAllMakes?format=json');
+      const data = await response.json();
+      
+      if (data.Results) {
+        const makes = data.Results
+          .map(item => item.Make_Name)
+          .sort();
+        
+        setVehicleMakes(makes);
+        localStorage.setItem('vehicleMakes', JSON.stringify(makes));
+        localStorage.setItem('vehicleDataLastUpdated', new Date().toISOString());
+        setLastUpdated(new Date().toISOString());
+        
+        showNotification('success', `✅ Successfully loaded ${makes.length} vehicle makes!`);
+      }
+    } catch (error) {
+      showNotification('error', `❌ Error fetching vehicle data: ${error.message}`);
+    }
+    setIsUpdatingVehicleData(false);
+  };
+
+  // Fetch models for a specific make
+  const fetchModelsForMake = async (make, year = null) => {
+    try {
+      let url = `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/${encodeURIComponent(make)}?format=json`;
+      
+      // If year is provided, get year-specific models
+      if (year) {
+        url = `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/${encodeURIComponent(make)}/modelyear/${year}?format=json`;
+      }
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.Results) {
+        const models = data.Results
+          .map(item => item.Model_Name)
+          .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+          .sort();
+        
+        return models;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      return [];
+    }
+  };
+
+  // Decode VIN to get vehicle information
+  const decodeVIN = async (vin) => {
+    setVinDecoding(true);
+    try {
+      const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
+      const data = await response.json();
+      
+      if (data.Results) {
+        // Extract useful information from VIN decode
+        const vinData = {};
+        data.Results.forEach(item => {
+          switch(item.Variable) {
+            case 'Make':
+              vinData.make = item.Value;
+              break;
+            case 'Model':
+              vinData.model = item.Value;
+              break;
+            case 'Model Year':
+              vinData.year = item.Value;
+              break;
+            case 'Body Class':
+              vinData.bodyType = item.Value;
+              break;
+            case 'Trim':
+              vinData.trim = item.Value;
+              break;
+            case 'Engine Model':
+              vinData.engine = item.Value;
+              break;
+            case 'Transmission Style':
+              vinData.transmission = item.Value;
+              break;
+            case 'Fuel Type - Primary':
+              vinData.fuel = item.Value;
+              break;
+            case 'Vehicle Type':
+              vinData.vehicleType = item.Value;
+              break;
+            case 'Manufacturer Name':
+              vinData.manufacturer = item.Value;
+              break;
+          }
+        });
+        
+        setVinDecoding(false);
+        return vinData;
+      }
+      setVinDecoding(false);
+      return null;
+    } catch (error) {
+      console.error('Error decoding VIN:', error);
+      setVinDecoding(false);
+      return null;
+    }
+  };
+
 
   // Check for existing session on mount
   useEffect(() => {
@@ -341,12 +492,15 @@ const CarLot = () => {
       car.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
       car.model.toLowerCase().includes(searchTerm.toLowerCase());
     
+    const matchesMake = selectedCategory === 'all' || 
+      car.make.toLowerCase() === selectedCategory.toLowerCase();
+    
     const matchesPrice = priceRange === 'all' ||
       (priceRange === 'under25k' && car.price < 25000) ||
       (priceRange === '25k-50k' && car.price >= 25000 && car.price < 50000) ||
       (priceRange === 'over50k' && car.price >= 50000);
     
-    return matchesSearch && matchesPrice;
+    return matchesSearch && matchesMake && matchesPrice;
   });
 
   const formatPrice = (price) => {
@@ -929,6 +1083,895 @@ const CarLot = () => {
     );
   };
 
+  // Add Listing Modal Component
+  const AddListingModal = () => {
+    const [listingForm, setListingForm] = useState({
+      vin: '',
+      make: '',
+      model: '',
+      year: new Date().getFullYear(),
+      price: '',
+      mileage: '',
+      location: '',
+      description: '',
+      fuel: 'Gasoline',
+      transmission: 'Automatic',
+      color: '',
+      bodyType: '',
+      trim: ''
+    });
+    const [availableModels, setAvailableModels] = useState([]);
+    const [loadingModels, setLoadingModels] = useState(false);
+    const [uploadedImages, setUploadedImages] = useState([]);
+    const [carfaxData, setCarfaxData] = useState(null);
+    const [loadingCarfax, setLoadingCarfax] = useState(false);
+    const [priceHistory, setPriceHistory] = useState([
+      { date: new Date().toISOString(), price: '' }
+    ]);
+
+    // Fetch models when make or year changes
+    useEffect(() => {
+      if (listingForm.make) {
+        setLoadingModels(true);
+        fetchModelsForMake(listingForm.make, listingForm.year).then((models) => {
+          setAvailableModels(models);
+          setLoadingModels(false);
+        });
+      } else {
+        setAvailableModels([]);
+      }
+    }, [listingForm.make, listingForm.year]);
+
+    const handleVINDecode = async () => {
+      if (listingForm.vin.length !== 17) {
+        showNotification('error', '❌ VIN must be exactly 17 characters');
+        return;
+      }
+
+      const vinData = await decodeVIN(listingForm.vin);
+      if (vinData) {
+        setListingForm({
+          ...listingForm,
+          make: vinData.make || listingForm.make,
+          model: vinData.model || listingForm.model,
+          year: vinData.year || listingForm.year,
+          bodyType: vinData.bodyClass || listingForm.bodyType,
+          trim: vinData.trim || listingForm.trim,
+          fuel: vinData.fuelType || listingForm.fuel,
+          transmission: vinData.transmission || listingForm.transmission
+        });
+        showNotification('success', '✅ VIN decoded successfully! Pre-filled vehicle info.');
+        
+        // Also fetch Carfax data
+        handleFetchCarfax();
+      } else {
+        showNotification('error', '❌ Could not decode VIN. Please enter manually.');
+      }
+    };
+
+    const handleFetchCarfax = async () => {
+      if (!listingForm.vin || listingForm.vin.length !== 17) {
+        showNotification('error', '❌ Please enter a valid 17-character VIN');
+        return;
+      }
+
+      setLoadingCarfax(true);
+      const data = await fetchCarfaxReport(listingForm.vin);
+      if (data) {
+        setCarfaxData(data);
+        showNotification('success', '✅ Carfax report loaded!');
+      } else {
+        showNotification('error', '❌ Could not fetch Carfax report');
+      }
+      setLoadingCarfax(false);
+    };
+
+    const handleImageUpload = (e) => {
+      const files = Array.from(e.target.files);
+      
+      if (uploadedImages.length + files.length > 10) {
+        showNotification('error', '❌ Maximum 10 images allowed');
+        return;
+      }
+
+      files.forEach(file => {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+          showNotification('error', `❌ ${file.name} is too large. Max 5MB per image.`);
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setUploadedImages(prev => [...prev, {
+            id: Date.now() + Math.random(),
+            url: event.target.result,
+            name: file.name
+          }]);
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const removeImage = (imageId) => {
+      setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+    };
+
+    const setAsPrimaryImage = (imageId) => {
+      setUploadedImages(prev => {
+        const images = [...prev];
+        const index = images.findIndex(img => img.id === imageId);
+        if (index > 0) {
+          const [image] = images.splice(index, 1);
+          images.unshift(image);
+        }
+        return images;
+      });
+      showNotification('success', '✅ Primary image updated');
+    };
+
+    const addPriceHistoryEntry = () => {
+      setPriceHistory([...priceHistory, { date: new Date().toISOString(), price: '' }]);
+    };
+
+    const updatePriceHistory = (index, field, value) => {
+      const updated = [...priceHistory];
+      updated[index][field] = value;
+      setPriceHistory(updated);
+    };
+
+    const removePriceHistoryEntry = (index) => {
+      if (priceHistory.length > 1) {
+        setPriceHistory(priceHistory.filter((_, i) => i !== index));
+      }
+    };
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      
+      if (uploadedImages.length === 0) {
+        showNotification('error', '❌ Please upload at least one image');
+        return;
+      }
+
+      // In production, this would save to database
+      showNotification('success', '✅ Listing created successfully!');
+      setShowAddListingModal(false);
+      
+      // Reset form
+      setListingForm({
+        vin: '',
+        make: '',
+        model: '',
+        year: new Date().getFullYear(),
+        price: '',
+        mileage: '',
+        location: '',
+        description: '',
+        fuel: 'Gasoline',
+        transmission: 'Automatic',
+        color: '',
+        bodyType: '',
+        trim: ''
+      });
+      setUploadedImages([]);
+      setCarfaxData(null);
+      setPriceHistory([{ date: new Date().toISOString(), price: '' }]);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white rounded-lg max-w-4xl w-full my-8">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-lg z-10">
+            <div className="flex justify-between items-center">
+              <h3 className="text-2xl font-bold">Create New Listing</h3>
+              <button onClick={() => setShowAddListingModal(false)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* VIN Decoder */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2">🔍 Quick Fill with VIN</h4>
+              <p className="text-sm text-blue-800 mb-3">Enter your 17-digit VIN to auto-fill vehicle details</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  maxLength="17"
+                  value={listingForm.vin}
+                  onChange={(e) => setListingForm({...listingForm, vin: e.target.value.toUpperCase()})}
+                  className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="1HGBH41JXMN109186"
+                />
+                <button
+                  type="button"
+                  onClick={handleVINDecode}
+                  disabled={vinDecoding || listingForm.vin.length !== 17}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
+                    vinDecoding || listingForm.vin.length !== 17
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {vinDecoding ? 'Decoding...' : 'Decode VIN'}
+                </button>
+              </div>
+
+              {/* Carfax Integration - HIDDEN FOR NOW */}
+              {/* 
+              {listingForm.vin.length === 17 && (
+                <div className="border-t border-blue-200 pt-3 mt-3">
+                  <button
+                    type="button"
+                    onClick={handleFetchCarfax}
+                    disabled={loadingCarfax}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {loadingCarfax ? 'Loading...' : '📊 Get Carfax Report'}
+                  </button>
+                  
+                  {carfaxData && (
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-blue-300">
+                      <h5 className="font-semibold text-gray-900 mb-2">Carfax Report Summary</h5>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">Accidents:</span>
+                          <span className={`ml-2 font-semibold ${carfaxData.accidents === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {carfaxData.accidents}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Owners:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{carfaxData.owners}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Service Records:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{carfaxData.serviceRecords}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Title:</span>
+                          <span className="ml-2 font-semibold text-green-600">{carfaxData.titleInfo}</span>
+                        </div>
+                      </div>
+                      <a 
+                        href={carfaxData.reportUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700 text-sm mt-2 inline-block"
+                      >
+                        View Full Report →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+              */}
+            </div>
+
+            {/* Photo Upload Section */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+              <h4 className="font-semibold text-gray-900 mb-3">📸 Vehicle Photos (Required)</h4>
+              <p className="text-sm text-gray-600 mb-4">Upload up to 10 photos. First image will be the primary photo.</p>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+                {uploadedImages.map((image, index) => (
+                  <div key={image.id} className="relative group">
+                    <img 
+                      src={image.url} 
+                      alt={`Upload ${index + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border-2 border-gray-200"
+                    />
+                    {index === 0 && (
+                      <div className="absolute top-1 left-1 bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                        Primary
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition rounded-lg flex items-center justify-center gap-2">
+                      {index !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAsPrimaryImage(image.id)}
+                          className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-blue-600 text-white text-xs rounded"
+                        >
+                          Set Primary
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(image.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 bg-red-600 text-white rounded"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <div className="border-2 border-blue-300 border-dashed rounded-lg p-6 text-center hover:bg-blue-50 transition">
+                  <Plus className="mx-auto mb-2 text-blue-600" size={32} />
+                  <p className="text-blue-600 font-medium">Click to upload photos</p>
+                  <p className="text-xs text-gray-500 mt-1">Max 10 images, 5MB each</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Make and Model */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Make *
+                </label>
+                <select
+                  required
+                  value={listingForm.make}
+                  onChange={(e) => setListingForm({...listingForm, make: e.target.value, model: ''})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Make</option>
+                  {vehicleMakes.length === 0 && (
+                    <option value="" disabled>No makes loaded - Update in Admin Settings</option>
+                  )}
+                  {vehicleMakes.map((make) => (
+                    <option key={make} value={make}>{make}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Model *
+                </label>
+                <select
+                  required
+                  value={listingForm.model}
+                  onChange={(e) => setListingForm({...listingForm, model: e.target.value})}
+                  disabled={!listingForm.make || loadingModels}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">
+                    {!listingForm.make ? 'Select make first' : loadingModels ? 'Loading models...' : 'Select Model'}
+                  </option>
+                  {availableModels.map((model) => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+                {listingForm.make && listingForm.year && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Showing models for {listingForm.year} {listingForm.make}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Year and Price */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Year *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1900"
+                  max={new Date().getFullYear() + 1}
+                  value={listingForm.year}
+                  onChange={(e) => setListingForm({...listingForm, year: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Price *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={listingForm.price}
+                  onChange={(e) => setListingForm({...listingForm, price: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="25000"
+                />
+              </div>
+            </div>
+
+            {/* Price History */}
+            <div className="border border-gray-300 rounded-lg p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-semibold text-gray-900">📈 Price History (Optional)</h4>
+                <button
+                  type="button"
+                  onClick={addPriceHistoryEntry}
+                  className="text-sm px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  + Add Entry
+                </button>
+              </div>
+              <p className="text-xs text-gray-600 mb-3">Track price changes to show transparency to buyers</p>
+              
+              <div className="space-y-2">
+                {priceHistory.map((entry, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="date"
+                      value={entry.date.split('T')[0]}
+                      onChange={(e) => updatePriceHistory(index, 'date', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={entry.price}
+                      onChange={(e) => updatePriceHistory(index, 'price', e.target.value)}
+                      placeholder="Price"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                    {priceHistory.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePriceHistoryEntry(index)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Body Type and Trim */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Body Type *
+                </label>
+                <select
+                  required
+                  value={listingForm.bodyType}
+                  onChange={(e) => setListingForm({...listingForm, bodyType: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Body Type</option>
+                  {bodyTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trim Level
+                </label>
+                <input
+                  type="text"
+                  value={listingForm.trim}
+                  onChange={(e) => setListingForm({...listingForm, trim: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="EX, LX, Sport, Limited, etc."
+                />
+              </div>
+            </div>
+
+            {/* Mileage and Location */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mileage *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={listingForm.mileage}
+                  onChange={(e) => setListingForm({...listingForm, mileage: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="50000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={listingForm.location}
+                  onChange={(e) => setListingForm({...listingForm, location: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="San Francisco, CA"
+                />
+              </div>
+            </div>
+
+            {/* Fuel and Transmission */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fuel Type *
+                </label>
+                <select
+                  value={listingForm.fuel}
+                  onChange={(e) => setListingForm({...listingForm, fuel: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option>Gasoline</option>
+                  <option>Diesel</option>
+                  <option>Electric</option>
+                  <option>Hybrid</option>
+                  <option>Plug-in Hybrid</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Transmission *
+                </label>
+                <select
+                  value={listingForm.transmission}
+                  onChange={(e) => setListingForm({...listingForm, transmission: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option>Automatic</option>
+                  <option>Manual</option>
+                  <option>CVT</option>
+                  <option>Semi-Automatic</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Color */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Color *
+              </label>
+              <input
+                type="text"
+                required
+                value={listingForm.color}
+                onChange={(e) => setListingForm({...listingForm, color: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Silver"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description *
+              </label>
+              <textarea
+                required
+                rows="4"
+                value={listingForm.description}
+                onChange={(e) => setListingForm({...listingForm, description: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Describe your vehicle's condition, features, and history..."
+              />
+            </div>
+
+            {vehicleMakes.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Note:</strong> Vehicle database not loaded. Please ask admin to update vehicle data in Admin Settings.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setShowAddListingModal(false)}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Create Listing
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-white rounded-lg max-w-2xl w-full my-8">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-lg">
+            <div className="flex justify-between items-center">
+              <h3 className="text-2xl font-bold">Create New Listing</h3>
+              <button onClick={() => setShowAddListingModal(false)} className="text-gray-500 hover:text-gray-700">
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* VIN Decoder */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2">🔍 Quick Fill with VIN</h4>
+              <p className="text-sm text-blue-800 mb-3">Enter your 17-digit VIN to auto-fill vehicle details</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  maxLength="17"
+                  value={listingForm.vin}
+                  onChange={(e) => setListingForm({...listingForm, vin: e.target.value.toUpperCase()})}
+                  className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="1HGBH41JXMN109186"
+                />
+                <button
+                  type="button"
+                  onClick={handleVINDecode}
+                  disabled={vinDecoding || listingForm.vin.length !== 17}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    vinDecoding || listingForm.vin.length !== 17
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {vinDecoding ? 'Decoding...' : 'Decode VIN'}
+                </button>
+              </div>
+            </div>
+
+            {/* Make and Model */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Make *
+                </label>
+                <select
+                  required
+                  value={listingForm.make}
+                  onChange={(e) => setListingForm({...listingForm, make: e.target.value, model: ''})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Make</option>
+                  {vehicleMakes.length === 0 && (
+                    <option value="" disabled>No makes loaded - Update in Admin Settings</option>
+                  )}
+                  {vehicleMakes.map((make) => (
+                    <option key={make} value={make}>{make}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Model *
+                </label>
+                <select
+                  required
+                  value={listingForm.model}
+                  onChange={(e) => setListingForm({...listingForm, model: e.target.value})}
+                  disabled={!listingForm.make || loadingModels}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">
+                    {!listingForm.make ? 'Select make first' : loadingModels ? 'Loading models...' : 'Select Model'}
+                  </option>
+                  {availableModels.map((model) => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+                {listingForm.make && listingForm.year && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Showing models for {listingForm.year} {listingForm.make}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Year and Price */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Year *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1900"
+                  max={new Date().getFullYear() + 1}
+                  value={listingForm.year}
+                  onChange={(e) => setListingForm({...listingForm, year: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Price *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={listingForm.price}
+                  onChange={(e) => setListingForm({...listingForm, price: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="25000"
+                />
+              </div>
+            </div>
+
+            {/* Body Type and Trim */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Body Type *
+                </label>
+                <select
+                  required
+                  value={listingForm.bodyType}
+                  onChange={(e) => setListingForm({...listingForm, bodyType: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Body Type</option>
+                  {bodyTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trim Level
+                </label>
+                <input
+                  type="text"
+                  value={listingForm.trim}
+                  onChange={(e) => setListingForm({...listingForm, trim: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="EX, LX, Sport, Limited, etc."
+                />
+              </div>
+            </div>
+
+            {/* Mileage and Location */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mileage *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={listingForm.mileage}
+                  onChange={(e) => setListingForm({...listingForm, mileage: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="50000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={listingForm.location}
+                  onChange={(e) => setListingForm({...listingForm, location: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="San Francisco, CA"
+                />
+              </div>
+            </div>
+
+            {/* Fuel and Transmission */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fuel Type *
+                </label>
+                <select
+                  value={listingForm.fuel}
+                  onChange={(e) => setListingForm({...listingForm, fuel: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option>Gasoline</option>
+                  <option>Diesel</option>
+                  <option>Electric</option>
+                  <option>Hybrid</option>
+                  <option>Plug-in Hybrid</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Transmission *
+                </label>
+                <select
+                  value={listingForm.transmission}
+                  onChange={(e) => setListingForm({...listingForm, transmission: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option>Automatic</option>
+                  <option>Manual</option>
+                  <option>CVT</option>
+                  <option>Semi-Automatic</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Color */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Color *
+              </label>
+              <input
+                type="text"
+                required
+                value={listingForm.color}
+                onChange={(e) => setListingForm({...listingForm, color: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Silver"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description *
+              </label>
+              <textarea
+                required
+                rows="4"
+                value={listingForm.description}
+                onChange={(e) => setListingForm({...listingForm, description: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Describe your vehicle's condition, features, and history..."
+              />
+            </div>
+
+            {vehicleMakes.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Note:</strong> Vehicle database not loaded. Please ask admin to update vehicle data in Admin Settings.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowAddListingModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Create Listing
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   // Seller Dashboard Component
   const SellerDashboard = () => {
     return (
@@ -991,7 +2034,10 @@ const CarLot = () => {
 
         {/* Add New Listing Button */}
         <div className="mb-6">
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
+          <button 
+            onClick={() => setShowAddListingModal(true)}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
+          >
             <Plus size={20} />
             Add New Listing
           </button>
@@ -1472,6 +2518,60 @@ const CarLot = () => {
                   <p className="text-xs text-gray-500">
                     This is the master admin login email. Cannot be changed via UI.
                   </p>
+                </div>
+
+                {/* Vehicle Data Management */}
+                <div className="border-b border-gray-200 pb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Vehicle Database</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Update vehicle makes and models from NHTSA API for search filters and listings.
+                  </p>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                      <div>
+                        <p className="text-gray-500">Vehicle Makes Loaded</p>
+                        <p className="font-semibold text-gray-900">{vehicleMakes.length || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Last Updated</p>
+                        <p className="font-semibold text-gray-900">
+                          {lastUpdated ? new Date(lastUpdated).toLocaleDateString() : 'Never'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={fetchVehicleMakes}
+                      disabled={isUpdatingVehicleData}
+                      className={`w-full px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2 ${
+                        isUpdatingVehicleData 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      {isUpdatingVehicleData ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Update Vehicle Database
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-blue-800">
+                      💡 <strong>Tip:</strong> This fetches all vehicle makes from the official NHTSA database. 
+                      Data is cached locally for fast performance. Update monthly or when adding new listings.
+                    </p>
+                  </div>
                 </div>
 
                 {/* System Info */}
@@ -2216,6 +3316,17 @@ const CarLot = () => {
                   <Filter size={20} className="text-gray-500" />
                   <span className="font-medium text-gray-700">Filters:</span>
                 </div>
+
+                <select 
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                >
+                  <option value="all">All Makes</option>
+                  {vehicleMakes.slice(0, 50).map((make) => (
+                    <option key={make} value={make}>{make}</option>
+                  ))}
+                </select>
                 
                 <select 
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2234,6 +3345,7 @@ const CarLot = () => {
                   <option>2023</option>
                   <option>2022</option>
                   <option>2021</option>
+                  <option>2020</option>
                 </select>
 
                 <select className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -2360,6 +3472,9 @@ const CarLot = () => {
 
       {/* Profile Modal */}
       {showProfileModal && user && !isMasterAdmin && <UserProfileModal />}
+
+      {/* Add Listing Modal */}
+      {showAddListingModal && <AddListingModal />}
 
       {/* Contact Modal */}
       {showContactModal && selectedCar && (
