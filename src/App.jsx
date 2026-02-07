@@ -7,105 +7,14 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-// Marketcheck API Configuration
-const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
-const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
-
-// TrueCar Affiliate Configuration
-const TRUECAR_AFFILIATE_ID = import.meta.env.VITE_TRUECAR_AFFILIATE_ID || 'PLACEHOLDER_ID';
-
-// Marketcheck API Helper Functions
-const marketcheck = {
-  // Search cars by location and criteria
-  search: async ({ make, model, year, zip, city, state, latitude, longitude, radius = 50, priceMin, priceMax, limit = 20 }) => {
-    try {
-      let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
-      
-      if (make) url += `&make=${encodeURIComponent(make)}`;
-      if (model) url += `&model=${encodeURIComponent(model)}`;
-      if (year) url += `&year=${year}`;
-      if (zip) url += `&zip=${zip}`;
-      if (city) url += `&city=${encodeURIComponent(city)}`;
-      if (state) url += `&state=${state}`;
-      if (latitude && longitude) {
-        url += `&latitude=${latitude}&longitude=${longitude}`;
-      }
-      if (radius) url += `&radius=${radius}`;
-      if (priceMin) url += `&price_min=${priceMin}`;
-      if (priceMax) url += `&price_max=${priceMax}`;
-      url += `&rows=${limit}`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      // Transform Marketcheck data to our format
-      if (data.listings) {
-        return data.listings.map(listing => ({
-          id: `mk_${listing.id}`,
-          source: 'marketcheck',
-          year: listing.year,
-          make: listing.make,
-          model: listing.model,
-          price: listing.price,
-          mileage: listing.miles,
-          location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
-          image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
-          dealer: {
-            name: listing.dealer?.name || 'Unknown Dealer',
-            phone: listing.dealer?.phone || '',
-            city: listing.dealer?.city || '',
-            state: listing.dealer?.state || '',
-            website: listing.dealer?.website || ''
-          },
-          vin: listing.vin,
-          fuel: listing.fuel_type || 'Gasoline',
-          transmission: listing.transmission || 'Automatic',
-          bodyType: listing.body_type || '',
-          trim: listing.trim || '',
-          distance: listing.distance || 0,
-          daysOnMarket: listing.dom || 0,
-          photos: listing.media?.photo_links || []
-        }));
-      }
-      
-      return [];
-    } catch (error) {
-      console.error('Marketcheck API error:', error);
-      return [];
-    }
-  },
-  
-  // Get car details by VIN
-  getByVin: async (vin) => {
-    try {
-      const url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}&vin=${vin}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      return data.listings?.[0] || null;
-    } catch (error) {
-      console.error('Marketcheck VIN lookup error:', error);
-      return null;
-    }
-  }
-};
-
-// TrueCar Helper Functions
-const trueCar = {
-  // Generate TrueCar affiliate link
-  getLink: (make, model, year, zip) => {
-    const baseUrl = 'https://www.truecar.com';
-    const params = new URLSearchParams({
-      affId: TRUECAR_AFFILIATE_ID,
-      make: make,
-      model: model,
-      year: year,
-      zip: zip || ''
-    });
-    return `${baseUrl}/used-cars-for-sale/listings/${make}/${model}/?${params.toString()}`;
-  }
-};
-
 const CarLot = () => {
+  // Marketcheck API Configuration
+  const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
+  const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
+  
+  // TrueCar Affiliate Configuration
+  const TRUECAR_AFFILIATE_ID = import.meta.env.VITE_TRUECAR_AFFILIATE_ID || 'PLACEHOLDER_ID';
+
   // Auth states
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -220,6 +129,78 @@ const CarLot = () => {
     } catch (error) {
       console.error('Could not get location:', error);
       return null;
+    }
+  };
+
+  // Marketcheck API Helper Functions
+  const marketcheck = {
+    search: async ({ make, model, year, zip, city, state, latitude, longitude, radius = 50, priceMin, priceMax, limit = 20 }) => {
+      try {
+        let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
+        
+        if (make) url += `&make=${encodeURIComponent(make)}`;
+        if (model) url += `&model=${encodeURIComponent(model)}`;
+        if (year) url += `&year=${year}`;
+        if (zip) url += `&zip=${zip}`;
+        if (city) url += `&city=${encodeURIComponent(city)}`;
+        if (state) url += `&state=${state}`;
+        if (latitude && longitude) url += `&latitude=${latitude}&longitude=${longitude}`;
+        if (radius) url += `&radius=${radius}`;
+        if (priceMin) url += `&price_min=${priceMin}`;
+        if (priceMax) url += `&price_max=${priceMax}`;
+        url += `&rows=${limit}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.listings) {
+          return data.listings.map(listing => ({
+            id: `mk_${listing.id}`,
+            source: 'marketcheck',
+            year: listing.year,
+            make: listing.make,
+            model: listing.model,
+            price: listing.price,
+            mileage: listing.miles,
+            location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
+            image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
+            dealer: {
+              name: listing.dealer?.name || 'Unknown Dealer',
+              phone: listing.dealer?.phone || '',
+              city: listing.dealer?.city || '',
+              state: listing.dealer?.state || '',
+              website: listing.dealer?.website || ''
+            },
+            vin: listing.vin,
+            fuel: listing.fuel_type || 'Gasoline',
+            transmission: listing.transmission || 'Automatic',
+            bodyType: listing.body_type || '',
+            trim: listing.trim || '',
+            distance: listing.distance || 0,
+            daysOnMarket: listing.dom || 0,
+            photos: listing.media?.photo_links || []
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error('Marketcheck API error:', error);
+        return [];
+      }
+    }
+  };
+
+  // TrueCar Helper
+  const trueCar = {
+    getLink: (make, model, year, zip) => {
+      const baseUrl = 'https://www.truecar.com';
+      const params = new URLSearchParams({
+        affId: TRUECAR_AFFILIATE_ID,
+        make,
+        model,
+        year,
+        zip: zip || ''
+      });
+      return `${baseUrl}/used-cars-for-sale/listings/${make}/${model}/?${params.toString()}`;
     }
   };
 
