@@ -1,11 +1,109 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
+// Marketcheck API Configuration
+const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
+const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
+
+// TrueCar Affiliate Configuration
+const TRUECAR_AFFILIATE_ID = import.meta.env.VITE_TRUECAR_AFFILIATE_ID || 'PLACEHOLDER_ID';
+
+// Marketcheck API Helper Functions
+const marketcheck = {
+  // Search cars by location and criteria
+  search: async ({ make, model, year, zip, city, state, latitude, longitude, radius = 50, priceMin, priceMax, limit = 20 }) => {
+    try {
+      let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
+      
+      if (make) url += `&make=${encodeURIComponent(make)}`;
+      if (model) url += `&model=${encodeURIComponent(model)}`;
+      if (year) url += `&year=${year}`;
+      if (zip) url += `&zip=${zip}`;
+      if (city) url += `&city=${encodeURIComponent(city)}`;
+      if (state) url += `&state=${state}`;
+      if (latitude && longitude) {
+        url += `&latitude=${latitude}&longitude=${longitude}`;
+      }
+      if (radius) url += `&radius=${radius}`;
+      if (priceMin) url += `&price_min=${priceMin}`;
+      if (priceMax) url += `&price_max=${priceMax}`;
+      url += `&rows=${limit}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      // Transform Marketcheck data to our format
+      if (data.listings) {
+        return data.listings.map(listing => ({
+          id: `mk_${listing.id}`,
+          source: 'marketcheck',
+          year: listing.year,
+          make: listing.make,
+          model: listing.model,
+          price: listing.price,
+          mileage: listing.miles,
+          location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
+          image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
+          dealer: {
+            name: listing.dealer?.name || 'Unknown Dealer',
+            phone: listing.dealer?.phone || '',
+            city: listing.dealer?.city || '',
+            state: listing.dealer?.state || '',
+            website: listing.dealer?.website || ''
+          },
+          vin: listing.vin,
+          fuel: listing.fuel_type || 'Gasoline',
+          transmission: listing.transmission || 'Automatic',
+          bodyType: listing.body_type || '',
+          trim: listing.trim || '',
+          distance: listing.distance || 0,
+          daysOnMarket: listing.dom || 0,
+          photos: listing.media?.photo_links || []
+        }));
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Marketcheck API error:', error);
+      return [];
+    }
+  },
+  
+  // Get car details by VIN
+  getByVin: async (vin) => {
+    try {
+      const url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}&vin=${vin}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      return data.listings?.[0] || null;
+    } catch (error) {
+      console.error('Marketcheck VIN lookup error:', error);
+      return null;
+    }
+  }
+};
+
+// TrueCar Helper Functions
+const trueCar = {
+  // Generate TrueCar affiliate link
+  getLink: (make, model, year, zip) => {
+    const baseUrl = 'https://www.truecar.com';
+    const params = new URLSearchParams({
+      affId: TRUECAR_AFFILIATE_ID,
+      make: make,
+      model: model,
+      year: year,
+      zip: zip || ''
+    });
+    return `${baseUrl}/used-cars-for-sale/listings/${make}/${model}/?${params.toString()}`;
+  }
+};
 
 const CarLot = () => {
   // Auth states
@@ -42,6 +140,23 @@ const CarLot = () => {
   const [isUpdatingVehicleData, setIsUpdatingVehicleData] = useState(false);
   const [vinDecoding, setVinDecoding] = useState(false);
 
+  // AI Chat Bot
+  const [showChatBot, setShowChatBot] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAITyping, setIsAITyping] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [conversationId, setConversationId] = useState(null);
+
+  // Monetization tracking
+  const [searchAnalytics, setSearchAnalytics] = useState({
+    totalSearches: 0,
+    cpcClicks: 0,
+    leadsGenerated: 0,
+    trucarClicks: 0,
+    revenue: 0
+  });
+
   // Vehicle body types
   const bodyTypes = [
     'Sedan', 'Coupe', 'Hatchback', 'Wagon', 'Convertible',
@@ -62,6 +177,222 @@ const CarLot = () => {
       lastReportedMileage: Math.floor(Math.random() * 100000) + 10000,
     };
   };
+
+  // Get user location
+  const getUserLocationData = async () => {
+    if (userLocation) return userLocation;
+
+    try {
+      // Try browser geolocation first
+      if (navigator.geolocation) {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+
+        setUserLocation(location);
+        return location;
+      }
+    } catch (error) {
+      console.log('Geolocation denied, using IP fallback');
+    }
+
+    // Fallback to IP geolocation
+    try {
+      const response = await fetch('https://ipapi.co/json/');
+      const data = await response.json();
+      
+      const location = {
+        city: data.city,
+        state: data.region_code,
+        zip: data.postal,
+        lat: data.latitude,
+        lng: data.longitude
+      };
+
+      setUserLocation(location);
+      return location;
+    } catch (error) {
+      console.error('Could not get location:', error);
+      return null;
+    }
+  };
+
+  // AI-powered car search
+  const searchCarsWithAI = async (userQuery) => {
+    const location = await getUserLocationData();
+    
+    // Parse user query for key terms
+    const query = userQuery.toLowerCase();
+    let make = null;
+    let model = null;
+    let priceMax = null;
+    
+    // Extract make
+    vehicleMakes.forEach(m => {
+      if (query.includes(m.toLowerCase())) {
+        make = m;
+      }
+    });
+    
+    // Extract price
+    const priceMatch = query.match(/under \$?(\d+)k?/i);
+    if (priceMatch) {
+      priceMax = parseInt(priceMatch[1]) * (priceMatch[1].length <= 2 ? 1000 : 1);
+    }
+    
+    // STEP 1: Search YOUR listings first (highest margin)
+    const localResults = listings.filter(car => {
+      let matches = true;
+      
+      if (make && car.make.toLowerCase() !== make.toLowerCase()) matches = false;
+      if (priceMax && car.price > priceMax) matches = false;
+      
+      // General keyword search
+      const searchText = `${car.make} ${car.model} ${car.description || ''}`.toLowerCase();
+      const keywords = query.split(' ').filter(w => w.length > 3);
+      keywords.forEach(keyword => {
+        if (!searchText.includes(keyword)) matches = false;
+      });
+      
+      return matches;
+    }).slice(0, 3);
+
+    // STEP 2: Search Marketcheck (external dealers)
+    let marketCheckResults = [];
+    try {
+      marketCheckResults = await marketcheck.search({
+        make: make,
+        priceMax: priceMax,
+        zip: location?.zip,
+        latitude: location?.lat,
+        longitude: location?.lng,
+        radius: 50,
+        limit: 10
+      });
+    } catch (error) {
+      console.error('Marketcheck search failed:', error);
+    }
+
+    // Track search
+    setSearchAnalytics(prev => ({
+      ...prev,
+      totalSearches: prev.totalSearches + 1
+    }));
+
+    return {
+      internal: localResults,
+      external: marketCheckResults,
+      location: location,
+      totalInternal: localResults.length,
+      totalExternal: marketCheckResults.length
+    };
+  };
+
+  // Handle chat messages
+  const handleChatMessage = async (message) => {
+    if (!message.trim()) return;
+
+    // Add user message
+    const userMsg = {
+      id: Date.now(),
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsAITyping(true);
+
+    try {
+      // Search for cars
+      const searchResults = await searchCarsWithAI(message);
+      
+      // Generate AI response
+      let aiResponse = '';
+      let allCars = [];
+      
+      // Show YOUR listings first
+      if (searchResults.internal.length > 0) {
+        aiResponse += `🏠 **FROM OUR INVENTORY** (${searchResults.internal.length} cars):\n\n`;
+        
+        searchResults.internal.forEach((car, idx) => {
+          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
+          aiResponse += `   📍 ${car.location} • ${formatMileage(car.mileage)} miles\n\n`;
+        });
+        
+        allCars = [...searchResults.internal];
+      }
+
+      // Show Marketcheck results (external dealers)
+      if (searchResults.external.length > 0) {
+        aiResponse += `\n🌐 **FROM NEARBY DEALERS** (${searchResults.external.length} more options):\n\n`;
+        
+        searchResults.external.slice(0, 5).forEach((car, idx) => {
+          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
+          aiResponse += `   📍 ${car.location} (${Math.round(car.distance)}mi away) • ${car.dealer.name}\n\n`;
+        });
+        
+        allCars = [...allCars, ...searchResults.external];
+      }
+
+      if (allCars.length === 0) {
+        aiResponse = `I couldn't find any exact matches for "${message}".\n\n`;
+        aiResponse += `💡 Try being more specific:\n`;
+        aiResponse += `• "Honda Accord under $25k"\n`;
+        aiResponse += `• "SUVs with low mileage"\n`;
+        aiResponse += `• "Reliable sedans near me"\n`;
+      } else {
+        aiResponse += `\n💬 Click any car to see details, or refine your search!`;
+      }
+
+      // Add AI message with results
+      const aiMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: aiResponse,
+        cars: allCars,
+        internal: searchResults.internal,
+        external: searchResults.external,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, aiMsg]);
+      setIsAITyping(false);
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      
+      const errorMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again!',
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, errorMsg]);
+      setIsAITyping(false);
+    }
+  };
+
+  // Initialize chat with greeting
+  useEffect(() => {
+    if (showChatBot && chatMessages.length === 0) {
+      const greeting = {
+        id: Date.now(),
+        role: 'assistant',
+        content: `Hi! I'm your AI car shopping assistant. 🚗\n\nI can help you find the perfect car! Just tell me what you're looking for.\n\nFor example:\n• "I need a reliable family SUV"\n• "Show me trucks under $35k"\n• "Looking for a fuel-efficient sedan"`,
+        timestamp: new Date()
+      };
+      setChatMessages([greeting]);
+    }
+  }, [showChatBot]);
 
   // Load vehicle data from localStorage on mount
   useEffect(() => {
@@ -969,6 +1300,191 @@ const CarLot = () => {
               <LogOut size={18} />
               Sign Out
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // AI ChatBot Component
+  const AIChatBot = () => {
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [chatMessages]);
+
+    if (!showChatBot) {
+      return (
+        <button
+          onClick={() => setShowChatBot(true)}
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition z-50 flex items-center gap-2"
+        >
+          <MessageSquare size={24} />
+          <span className="font-medium">AI Car Finder</span>
+        </button>
+      );
+    }
+
+    return (
+      <div className="fixed bottom-6 right-6 w-96 bg-white rounded-lg shadow-2xl z-50 flex flex-col" style={{height: '600px'}}>
+        {/* Header */}
+        <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={20} />
+            <div>
+              <h3 className="font-bold">AI Car Finder</h3>
+              <p className="text-xs text-blue-100">Powered by Claude AI</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowChatBot(false)}
+            className="text-white hover:bg-blue-700 p-1 rounded"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {chatMessages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-lg p-3 ${
+                msg.role === 'user' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 text-gray-900'
+              }`}>
+                <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                
+                {/* Show car results */}
+                {msg.cars && msg.cars.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {msg.cars.map((car) => (
+                      <div
+                        key={car.id}
+                        className="bg-white text-gray-900 p-3 rounded border border-gray-200"
+                      >
+                        <div className="flex gap-2 mb-2">
+                          <img 
+                            src={car.image} 
+                            alt={`${car.year} ${car.make} ${car.model}`}
+                            className="w-20 h-20 object-cover rounded"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate">
+                              {car.year} {car.make} {car.model}
+                            </div>
+                            <div className="text-blue-600 font-bold text-sm">
+                              {formatPrice(car.price)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {car.location}
+                              {car.source === 'marketcheck' && ` • ${Math.round(car.distance)}mi`}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 text-xs">
+                          {car.source === 'marketcheck' ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  // Track CPC click
+                                  setSearchAnalytics(prev => ({
+                                    ...prev,
+                                    cpcClicks: prev.cpcClicks + 1,
+                                    revenue: prev.revenue + 1.50
+                                  }));
+                                  window.open(car.dealer.website || `https://www.google.com/search?q=${encodeURIComponent(car.dealer.name)}`, '_blank');
+                                  showNotification('success', '💰 Opening dealer website...');
+                                }}
+                                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >
+                                📍 Contact Dealer
+                              </button>
+                              <button
+                                onClick={() => {
+                                  // Track TrueCar click
+                                  setSearchAnalytics(prev => ({
+                                    ...prev,
+                                    trucarClicks: prev.trucarClicks + 1
+                                  }));
+                                  const link = trueCar.getLink(car.make, car.model, car.year, userLocation?.zip);
+                                  window.open(link, '_blank');
+                                  showNotification('success', '🎯 Opening TrueCar pricing...');
+                                }}
+                                className="flex-1 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+                              >
+                                💰 Get Best Price
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setViewingCarId(car.id);
+                                setCurrentView('cardetail');
+                                setShowChatBot(false);
+                              }}
+                              className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              View Details →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isAITyping && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-lg p-3">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-gray-200 p-4">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleChatMessage(chatInput);
+          }}>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Describe your dream car..."
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim() || isAITyping}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                <Send size={20} />
+              </button>
+            </div>
+          </form>
+          
+          <div className="text-xs text-gray-500 mt-2 text-center">
+            💡 Try: "SUVs under $30k" or "reliable sedans"
           </div>
         </div>
       </div>
@@ -2249,11 +2765,11 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">Total Users</p>
-                <p className="text-3xl font-bold text-gray-900">{users.length || '—'}</p>
+                <p className="text-gray-500 text-sm">AI Searches</p>
+                <p className="text-3xl font-bold text-gray-900">{searchAnalytics.totalSearches}</p>
               </div>
               <div className="bg-green-100 p-3 rounded-lg">
-                <User className="text-green-600" size={24} />
+                <MessageSquare className="text-green-600" size={24} />
               </div>
             </div>
           </div>
@@ -2261,11 +2777,11 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">Inquiries</p>
-                <p className="text-3xl font-bold text-gray-900">156</p>
+                <p className="text-gray-500 text-sm">Leads Generated</p>
+                <p className="text-3xl font-bold text-gray-900">{searchAnalytics.leadsGenerated}</p>
               </div>
               <div className="bg-purple-100 p-3 rounded-lg">
-                <MessageSquare className="text-purple-600" size={24} />
+                <User className="text-purple-600" size={24} />
               </div>
             </div>
           </div>
@@ -2273,8 +2789,8 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">Revenue</p>
-                <p className="text-3xl font-bold text-gray-900">$2.4k</p>
+                <p className="text-gray-500 text-sm">AI Revenue</p>
+                <p className="text-3xl font-bold text-gray-900">${searchAnalytics.revenue.toFixed(2)}</p>
               </div>
               <div className="bg-yellow-100 p-3 rounded-lg">
                 <DollarSign className="text-yellow-600" size={24} />
@@ -3480,6 +3996,9 @@ const CarLot = () => {
       {showContactModal && selectedCar && (
         <ContactModal car={selectedCar} onClose={() => setShowContactModal(false)} />
       )}
+
+      {/* AI ChatBot */}
+      <AIChatBot />
 
       {/* Loading State */}
       {loading && (
