@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send } from 'lucide-react';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -4096,13 +4096,5 @@ const CarLot = () => {
     </div>
   );
 };
-
-// Missing Eye import - adding it here
-const Eye = ({ size, className }) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-);
 
 export default CarLot;
