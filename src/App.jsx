@@ -4095,6 +4095,6 @@ const CarLot = () => {
       </footer>
     </div>
   );
-};
+}
 
 export default CarLot;
