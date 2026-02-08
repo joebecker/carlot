@@ -438,10 +438,10 @@ const CarLot = () => {
         return data.listings.map(listing => ({
           id: `mk_${listing.id}`,
           source: 'marketcheck',
-          year: listing.year,
-          make: listing.make,
-          model: listing.model,
-          trim: listing.trim || '',
+          year: listing.build?.year || listing.year,
+          make: listing.build?.make || listing.make,
+          model: listing.build?.model || listing.model,
+          trim: listing.build?.trim || listing.trim || '',
           price: listing.price,
           mileage: listing.miles,
           location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
@@ -459,15 +459,15 @@ const CarLot = () => {
           vin: listing.vin || '',
           fuel: listing.fuel_type || 'Gasoline',
           transmission: listing.transmission || 'Automatic',
-          bodyType: listing.body_type || '',
-          exteriorColor: listing.exterior_color || '',
-          interiorColor: listing.interior_color || '',
+          bodyType: listing.body_type || listing.build?.body_type || '',
+          exteriorColor: listing.exterior_color || listing.base_ext_color || '',
+          interiorColor: listing.interior_color || listing.base_int_color || '',
           description: listing.comment || listing.description || '',
           features: listing.build?.optional_specs || listing.features || [],
           mpgCity: listing.fuel_economy?.city_mpg || null,
           mpgHighway: listing.fuel_economy?.highway_mpg || null,
-          engine: listing.engine || '',
-          drivetrain: listing.drivetrain || ''
+          engine: listing.engine || listing.build?.engine || '',
+          drivetrain: listing.drivetrain || listing.build?.drivetrain || ''
         }));
       }
       return [];
