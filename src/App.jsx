@@ -1820,34 +1820,18 @@ const CarLot = () => {
   const CarDetailPage = () => {
     // Try to find car in local listings first, then use selectedCar (for external listings)
     const car = listings.find(c => c.id === viewingCarId) || selectedCar;
-    const [detailedCar, setDetailedCar] = useState(null);
-    const [loadingDetails, setLoadingDetails] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
     
-    // Fetch detailed info for external listings
-    useEffect(() => {
-      const fetchDetails = async () => {
-        if (car && car.source === 'marketcheck' && viewingCarId) {
-          setLoadingDetails(true);
-          const details = await fetchMarketcheckDetails(viewingCarId);
-          if (details) {
-            setDetailedCar(details);
-          }
-          setLoadingDetails(false);
-        } else {
-          setDetailedCar(null);
-        }
-      };
-      
-      fetchDetails();
-    }, [viewingCarId, car]);
-    
-    // Use detailed car data if available, otherwise use basic car data
-    const displayCar = detailedCar || car;
+    // Use the car data directly - we already have all details from the search
+    const displayCar = car;
     
     console.log('displayCar data:', displayCar);
     console.log('displayCar.year:', displayCar?.year);
     console.log('displayCar.make:', displayCar?.make);
+    console.log('displayCar.model:', displayCar?.model);
+    console.log('displayCar.exteriorColor:', displayCar?.exteriorColor);
+    
+    if (!car) {
     console.log('displayCar.model:', displayCar?.model);
     
     if (!car) {
@@ -1879,13 +1863,6 @@ const CarLot = () => {
           </svg>
           Back to Listings
         </button>
-
-        {/* Loading indicator for external listings */}
-        {loadingDetails && isExternal && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm">
-            ⏳ Loading additional details and photos...
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Images and Details */}
