@@ -414,7 +414,11 @@ const CarLot = () => {
 
   const searchMarketcheck = async ({ make, model, zip, latitude, longitude, radius = 50, priceMax, limit = 10 }) => {
     try {
-      let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
+      // Use import.meta.env directly instead of constant
+      const apiKey = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
+      console.log('Marketcheck API Key:', apiKey ? 'Loaded' : 'Not Loaded');
+      
+      let url = `https://api.marketcheck.com/v2/search/car/active?api_key=${apiKey}`;
       
       if (make) url += `&make=${encodeURIComponent(make)}`;
       if (model) url += `&model=${encodeURIComponent(model)}`;
@@ -423,6 +427,8 @@ const CarLot = () => {
       if (radius) url += `&radius=${radius}`;
       if (priceMax) url += `&price_max=${priceMax}`;
       url += `&rows=${limit}`;
+      
+      console.log('Marketcheck URL:', url);
       
       const response = await fetch(url);
       const data = await response.json();
