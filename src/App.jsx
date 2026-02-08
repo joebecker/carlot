@@ -458,10 +458,18 @@ const CarLot = () => {
     let make = null;
     let priceMax = null;
     
-    // Extract make from query
-    const commonMakes = ['toyota', 'honda', 'ford', 'chevrolet', 'nissan', 'bmw', 'mercedes', 'audi', 'tesla', 'jeep'];
+    // Extract make from query - expanded list
+    const commonMakes = [
+      'toyota', 'honda', 'ford', 'chevrolet', 'chevy', 'nissan', 'bmw', 'mercedes', 'audi', 'tesla',
+      'jeep', 'dodge', 'ram', 'mazda', 'volkswagen', 'vw', 'hyundai', 'kia', 'subaru', 'lexus',
+      'acura', 'infiniti', 'cadillac', 'buick', 'gmc', 'lincoln', 'volvo', 'porsche', 'jaguar',
+      'land rover', 'mini', 'fiat', 'genesis', 'alfa romeo', 'maserati', 'bentley', 'lamborghini'
+    ];
+    
     commonMakes.forEach(m => {
-      if (query.includes(m)) make = m;
+      if (query.includes(m)) {
+        make = m.charAt(0).toUpperCase() + m.slice(1); // Capitalize first letter
+      }
     });
     
     // Extract price
@@ -469,6 +477,8 @@ const CarLot = () => {
     if (priceMatch) {
       priceMax = parseInt(priceMatch[1]) * (priceMatch[1].length <= 2 ? 1000 : 1);
     }
+    
+    console.log('Search params:', { make, priceMax, query }); // Debug log
     
     // Search YOUR listings first
     const localResults = listings.filter(car => {
@@ -480,6 +490,8 @@ const CarLot = () => {
     let externalResults = [];
     try {
       const location = await getUserLocation();
+      console.log('User location:', location); // Debug log
+      
       if (location) {
         externalResults = await searchMarketcheck({
           make,
@@ -490,6 +502,7 @@ const CarLot = () => {
           radius: 50,
           limit: 5
         });
+        console.log('Marketcheck results:', externalResults); // Debug log
       }
     } catch (error) {
       console.error('External search failed:', error);
