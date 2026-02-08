@@ -416,7 +416,7 @@ const CarLot = () => {
     try {
       // Marketcheck API key - safe to hardcode (client-side API key)
       // Replace with your actual key from https://www.marketcheck.com/automotive/
-      const apiKey = 'pmPS7eHw5ULSnMbX2e9JHmSqh5VPArj6';
+      const apiKey = 'YOUR_MARKETCHECK_API_KEY_HERE';
       
       if (!apiKey || apiKey === 'YOUR_MARKETCHECK_API_KEY_HERE') {
         console.error('Please add your Marketcheck API key in src/App.jsx line ~418');
@@ -1735,7 +1735,8 @@ const CarLot = () => {
 
   // Car Detail Page Component
   const CarDetailPage = () => {
-    const car = listings.find(c => c.id === viewingCarId);
+    // Try to find car in local listings first, then use selectedCar (for external listings)
+    const car = listings.find(c => c.id === viewingCarId) || selectedCar;
     
     if (!car) {
       return (
@@ -1750,6 +1751,9 @@ const CarLot = () => {
         </div>
       );
     }
+
+    // Check if this is an external listing
+    const isExternal = car.source === 'marketcheck';
 
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1910,22 +1914,55 @@ const CarLot = () => {
                 </div>
               </div>
 
-              {/* Seller Info */}
+              {/* Seller/Dealer Info */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Seller Information</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">
+                  {isExternal ? 'Dealer Information' : 'Seller Information'}
+                </h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-500">Seller</p>
-                    <p className="font-semibold text-gray-900">{car.seller}</p>
+                    <p className="text-sm text-gray-500">{isExternal ? 'Dealer' : 'Seller'}</p>
+                    <p className="font-semibold text-gray-900">
+                      {isExternal ? car.dealer?.name : car.seller}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Phone size={18} className="text-blue-600" />
-                    <span>{car.sellerPhone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Mail size={18} className="text-blue-600" />
-                    <span className="text-sm">{car.sellerEmail}</span>
-                  </div>
+                  {isExternal ? (
+                    <>
+                      {car.dealer?.phone && (
+                        <div className="flex items-center gap-2 text-gray-700">
+                          <Phone size={18} className="text-blue-600" />
+                          <span>{car.dealer.phone}</span>
+                        </div>
+                      )}
+                      {car.dealer?.website && (
+                        <a 
+                          href={car.dealer.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
+                        >
+                          <Mail size={18} />
+                          <span>Visit Dealer Website</span>
+                        </a>
+                      )}
+                      {car.distance && (
+                        <div className="text-sm text-gray-600">
+                          📍 {Math.round(car.distance)} miles away
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <Phone size={18} className="text-blue-600" />
+                        <span>{car.sellerPhone}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <Mail size={18} className="text-blue-600" />
+                        <span className="text-sm">{car.sellerEmail}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2178,6 +2215,7 @@ const CarLot = () => {
                                         key={car.id}
                                         onClick={() => {
                                           setViewingCarId(car.id);
+                                          setSelectedCar(car);
                                           setCurrentView('cardetail');
                                         }}
                                         className="w-full bg-gray-50 text-gray-900 p-2 rounded border border-gray-200 hover:border-blue-500 transition text-left"
