@@ -464,17 +464,22 @@ const CarLot = () => {
   const fetchMarketcheckDetails = async (listingId) => {
     try {
       const apiKey = 'pmPS7eHw5ULSnMbX2e9JHmSqh5VPArj6';
-      // Extract numeric ID from mk_12345 format
+      // Extract the actual Marketcheck ID (remove mk_ prefix)
       const id = listingId.replace('mk_', '');
       
-      const url = `https://api.marketcheck.com/v2/listing/${id}?api_key=${apiKey}`;
-      console.log('Fetching listing details:', url);
+      // Correct endpoint is /v2/listings/{id} (plural)
+      const url = `https://api.marketcheck.com/v2/listings/${id}?api_key=${apiKey}`;
+      console.log('Fetching listing details for ID:', id);
+      console.log('Full URL:', url);
       
       const response = await fetch(url);
       const data = await response.json();
       
+      console.log('Marketcheck detail response:', data);
+      
       if (data && data.listing) {
         const listing = data.listing;
+        console.log('Processing listing data:', listing);
         return {
           id: listingId,
           source: 'marketcheck',
