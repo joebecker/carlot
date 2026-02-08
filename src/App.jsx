@@ -8,13 +8,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const CarLot = () => {
-  // Marketcheck API Configuration
-  const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
-  const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
-  
-  // TrueCar Affiliate Configuration
-  const TRUECAR_AFFILIATE_ID = import.meta.env.VITE_TRUECAR_AFFILIATE_ID || 'PLACEHOLDER_ID';
-
   // Auth states
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -132,79 +125,7 @@ const CarLot = () => {
     }
   };
 
-  // Marketcheck API Helper Functions
-  const marketcheck = {
-    search: async ({ make, model, year, zip, city, state, latitude, longitude, radius = 50, priceMin, priceMax, limit = 20 }) => {
-      try {
-        let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
-        
-        if (make) url += `&make=${encodeURIComponent(make)}`;
-        if (model) url += `&model=${encodeURIComponent(model)}`;
-        if (year) url += `&year=${year}`;
-        if (zip) url += `&zip=${zip}`;
-        if (city) url += `&city=${encodeURIComponent(city)}`;
-        if (state) url += `&state=${state}`;
-        if (latitude && longitude) url += `&latitude=${latitude}&longitude=${longitude}`;
-        if (radius) url += `&radius=${radius}`;
-        if (priceMin) url += `&price_min=${priceMin}`;
-        if (priceMax) url += `&price_max=${priceMax}`;
-        url += `&rows=${limit}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.listings) {
-          return data.listings.map(listing => ({
-            id: `mk_${listing.id}`,
-            source: 'marketcheck',
-            year: listing.year,
-            make: listing.make,
-            model: listing.model,
-            price: listing.price,
-            mileage: listing.miles,
-            location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
-            image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
-            dealer: {
-              name: listing.dealer?.name || 'Unknown Dealer',
-              phone: listing.dealer?.phone || '',
-              city: listing.dealer?.city || '',
-              state: listing.dealer?.state || '',
-              website: listing.dealer?.website || ''
-            },
-            vin: listing.vin,
-            fuel: listing.fuel_type || 'Gasoline',
-            transmission: listing.transmission || 'Automatic',
-            bodyType: listing.body_type || '',
-            trim: listing.trim || '',
-            distance: listing.distance || 0,
-            daysOnMarket: listing.dom || 0,
-            photos: listing.media?.photo_links || []
-          }));
-        }
-        return [];
-      } catch (error) {
-        console.error('Marketcheck API error:', error);
-        return [];
-      }
-    }
-  };
-
-  // TrueCar Helper
-  const trueCar = {
-    getLink: (make, model, year, zip) => {
-      const baseUrl = 'https://www.truecar.com';
-      const params = new URLSearchParams({
-        affId: TRUECAR_AFFILIATE_ID,
-        make,
-        model,
-        year,
-        zip: zip || ''
-      });
-      return `${baseUrl}/used-cars-for-sale/listings/${make}/${model}/?${params.toString()}`;
-    }
-  };
-
-  // AI-powered car search
+  // AI-powered car search (local only for now)
   const searchCarsWithAI = async (userQuery) => {
     const location = await getUserLocationData();
     
@@ -242,36 +163,14 @@ const CarLot = () => {
       });
       
       return matches;
-    }).slice(0, 3);
-
-    // STEP 2: Search Marketcheck (external dealers)
-    let marketCheckResults = [];
-    try {
-      marketCheckResults = await marketcheck.search({
-        make: make,
-        priceMax: priceMax,
-        zip: location?.zip,
-        latitude: location?.lat,
-        longitude: location?.lng,
-        radius: 50,
-        limit: 10
-      });
-    } catch (error) {
-      console.error('Marketcheck search failed:', error);
-    }
-
-    // Track search
-    setSearchAnalytics(prev => ({
-      ...prev,
-      totalSearches: prev.totalSearches + 1
-    }));
+    }).slice(0, 10);
 
     return {
       internal: localResults,
-      external: marketCheckResults,
+      external: [],
       location: location,
       totalInternal: localResults.length,
-      totalExternal: marketCheckResults.length
+      totalExternal: 0
     };
   };
 
@@ -299,9 +198,9 @@ const CarLot = () => {
       let aiResponse = '';
       let allCars = [];
       
-      // Show YOUR listings first
+      // Show YOUR listings
       if (searchResults.internal.length > 0) {
-        aiResponse += `🏠 **FROM OUR INVENTORY** (${searchResults.internal.length} cars):\n\n`;
+        aiResponse += `I found ${searchResults.internal.length} great options for you!\n\n`;
         
         searchResults.internal.forEach((car, idx) => {
           aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
@@ -309,28 +208,13 @@ const CarLot = () => {
         });
         
         allCars = [...searchResults.internal];
-      }
-
-      // Show Marketcheck results (external dealers)
-      if (searchResults.external.length > 0) {
-        aiResponse += `\n🌐 **FROM NEARBY DEALERS** (${searchResults.external.length} more options):\n\n`;
-        
-        searchResults.external.slice(0, 5).forEach((car, idx) => {
-          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
-          aiResponse += `   📍 ${car.location} (${Math.round(car.distance)}mi away) • ${car.dealer.name}\n\n`;
-        });
-        
-        allCars = [...allCars, ...searchResults.external];
-      }
-
-      if (allCars.length === 0) {
+        aiResponse += `\n💬 Click any car to see details, or refine your search!`;
+      } else {
         aiResponse = `I couldn't find any exact matches for "${message}".\n\n`;
         aiResponse += `💡 Try being more specific:\n`;
         aiResponse += `• "Honda Accord under $25k"\n`;
         aiResponse += `• "SUVs with low mileage"\n`;
-        aiResponse += `• "Reliable sedans near me"\n`;
-      } else {
-        aiResponse += `\n💬 Click any car to see details, or refine your search!`;
+        aiResponse += `• "Reliable sedans"\n`;
       }
 
       // Add AI message with results
@@ -1371,51 +1255,16 @@ const CarLot = () => {
 
                         {/* Action Buttons */}
                         <div className="flex gap-2 text-xs">
-                          {car.source === 'marketcheck' ? (
-                            <>
-                              <button
-                                onClick={() => {
-                                  // Track CPC click
-                                  setSearchAnalytics(prev => ({
-                                    ...prev,
-                                    cpcClicks: prev.cpcClicks + 1,
-                                    revenue: prev.revenue + 1.50
-                                  }));
-                                  window.open(car.dealer.website || `https://www.google.com/search?q=${encodeURIComponent(car.dealer.name)}`, '_blank');
-                                  showNotification('success', '💰 Opening dealer website...');
-                                }}
-                                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                              >
-                                📍 Contact Dealer
-                              </button>
-                              <button
-                                onClick={() => {
-                                  // Track TrueCar click
-                                  setSearchAnalytics(prev => ({
-                                    ...prev,
-                                    trucarClicks: prev.trucarClicks + 1
-                                  }));
-                                  const link = trueCar.getLink(car.make, car.model, car.year, userLocation?.zip);
-                                  window.open(link, '_blank');
-                                  showNotification('success', '🎯 Opening TrueCar pricing...');
-                                }}
-                                className="flex-1 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
-                              >
-                                💰 Get Best Price
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setViewingCarId(car.id);
-                                setCurrentView('cardetail');
-                                setShowChatBot(false);
-                              }}
-                              className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                            >
-                              View Details →
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setViewingCarId(car.id);
+                              setCurrentView('cardetail');
+                              setShowChatBot(false);
+                            }}
+                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            View Details →
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -2758,8 +2607,8 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">Leads Generated</p>
-                <p className="text-3xl font-bold text-gray-900">{searchAnalytics.leadsGenerated}</p>
+                <p className="text-gray-500 text-sm">Total Users</p>
+                <p className="text-3xl font-bold text-gray-900">{users.length || '—'}</p>
               </div>
               <div className="bg-purple-100 p-3 rounded-lg">
                 <User className="text-purple-600" size={24} />
@@ -2770,8 +2619,8 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">AI Revenue</p>
-                <p className="text-3xl font-bold text-gray-900">${searchAnalytics.revenue.toFixed(2)}</p>
+                <p className="text-gray-500 text-sm">Inquiries</p>
+                <p className="text-3xl font-bold text-gray-900">156</p>
               </div>
               <div className="bg-yellow-100 p-3 rounded-lg">
                 <DollarSign className="text-yellow-600" size={24} />
