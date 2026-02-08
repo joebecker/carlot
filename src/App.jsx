@@ -415,13 +415,7 @@ const CarLot = () => {
   const searchMarketcheck = async ({ make, model, zip, latitude, longitude, radius = 50, priceMax, limit = 10 }) => {
     try {
       // Marketcheck API key - safe to hardcode (client-side API key)
-      // Replace with your actual key from https://www.marketcheck.com/automotive/
-      const apiKey = 'YOUR_MARKETCHECK_API_KEY_HERE';
-      
-      if (!apiKey || apiKey === 'YOUR_MARKETCHECK_API_KEY_HERE') {
-        console.error('Please add your Marketcheck API key in src/App.jsx line ~418');
-        return [];
-      }
+      const apiKey = 'pmPS7eHw5ULSnMbX2e9JHmSqh5VPArj6';
       
       console.log('Marketcheck API ready');
       
