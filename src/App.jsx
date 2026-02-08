@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -26,6 +26,12 @@ const CarLot = () => {
   const [showContactModal, setShowContactModal] = useState(false);
   const [selectedCar, setSelectedCar] = useState(null);
   const [viewingCarId, setViewingCarId] = useState(null);
+  
+  // AI Chat Bot states
+  const [showChatBot, setShowChatBot] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAITyping, setIsAITyping] = useState(false);
   
   // Financing calculator states
   const [loanAmount, setLoanAmount] = useState(30000);
@@ -361,6 +367,80 @@ const CarLot = () => {
   };
 
   // Financing Calculator Logic
+
+  // AI car search function
+  const searchCarsWithAI = async (userQuery) => {
+    const query = userQuery.toLowerCase();
+    
+    // Simple keyword search in your listings
+    const results = listings.filter(car => {
+      const searchText = `${car.year} ${car.make} ${car.model} ${car.description || ''}`.toLowerCase();
+      return searchText.includes(query);
+    }).slice(0, 5);
+    
+    return results;
+  };
+
+  // Handle chat messages
+  const handleChatMessage = async (message) => {
+    if (!message.trim()) return;
+
+    const userMsg = {
+      id: Date.now(),
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsAITyping(true);
+
+    try {
+      const results = await searchCarsWithAI(message);
+      
+      let aiResponse = '';
+      
+      if (results.length > 0) {
+        aiResponse = `I found ${results.length} options for you!\n\n`;
+        results.forEach((car, idx) => {
+          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
+        });
+        aiResponse += `\nClick any car above to see details!`;
+      } else {
+        aiResponse = `I couldn't find matches for "${message}". Try searching for a make, model, or type like "Honda", "SUV", or "under $25k"`;
+      }
+
+      const aiMsg = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: aiResponse,
+        cars: results,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, aiMsg]);
+      setIsAITyping(false);
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      setIsAITyping(false);
+    }
+  };
+
+  // Initialize chat greeting
+  useEffect(() => {
+    if (showChatBot && chatMessages.length === 0) {
+      const greeting = {
+        id: Date.now(),
+        role: 'assistant',
+        content: `Hi! I'm your AI car shopping assistant. 🚗\n\nTell me what you're looking for!\n\nExamples:\n• "Honda Accord"\n• "SUVs under $30k"\n• "Reliable sedan"`,
+        timestamp: new Date()
+      };
+      setChatMessages([greeting]);
+    }
+  }, [showChatBot]);
+
   const calculateMonthlyPayment = () => {
     const principal = loanAmount - downPayment;
     const monthlyRate = interestRate / 100 / 12;
@@ -514,6 +594,136 @@ const CarLot = () => {
   };
 
   // Contact Modal Component
+
+  // AI ChatBot Component
+  const AIChatBot = () => {
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [chatMessages]);
+
+    if (!showChatBot) {
+      return (
+        <button
+          onClick={() => setShowChatBot(true)}
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition z-50 flex items-center gap-2"
+        >
+          <MessageSquare size={24} />
+          <span className="font-medium">AI Car Finder</span>
+        </button>
+      );
+    }
+
+    return (
+      <div className="fixed bottom-6 right-6 w-96 bg-white rounded-lg shadow-2xl z-50 flex flex-col" style={{height: '600px'}}>
+        <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={20} />
+            <h3 className="font-bold">AI Car Finder</h3>
+          </div>
+          <button
+            onClick={() => setShowChatBot(false)}
+            className="text-white hover:bg-blue-700 p-1 rounded"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {chatMessages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-lg p-3 ${
+                msg.role === 'user' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 text-gray-900'
+              }`}>
+                <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                
+                {msg.cars && msg.cars.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {msg.cars.map((car) => (
+                      <button
+                        key={car.id}
+                        onClick={() => {
+                          setViewingCarId(car.id);
+                          setCurrentView('cardetail');
+                          setShowChatBot(false);
+                        }}
+                        className="w-full bg-white text-gray-900 p-2 rounded border border-gray-200 hover:border-blue-500 transition text-left"
+                      >
+                        <div className="flex gap-2">
+                          <img 
+                            src={car.image} 
+                            alt={`${car.year} ${car.make} ${car.model}`}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="font-semibold text-sm">
+                              {car.year} {car.make} {car.model}
+                            </div>
+                            <div className="text-blue-600 font-bold text-sm">
+                              {formatPrice(car.price)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Click to view →
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isAITyping && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-lg p-3">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="border-t border-gray-200 p-4">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleChatMessage(chatInput);
+          }}>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="What car are you looking for?"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim() || isAITyping}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+              >
+                <Send size={20} />
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const ContactModal = ({ car, onClose }) => {
     const [formData, setFormData] = useState({
       name: '',
@@ -2043,6 +2253,10 @@ const CarLot = () => {
         <ContactModal car={selectedCar} onClose={() => setShowContactModal(false)} />
       )}
 
+      {/* AI ChatBot */}
+      <AIChatBot />
+
+
       {/* Loading State */}
       {loading && (
         <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
@@ -2140,12 +2354,5 @@ const CarLot = () => {
   );
 };
 
-// Missing Eye import - adding it here
-const Eye = ({ size, className }) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-);
 
 export default CarLot;
