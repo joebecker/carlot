@@ -190,11 +190,16 @@ const CarLot = () => {
   // Watch for location changes from react-router
   useEffect(() => {
     const path = location.pathname;
+    console.log('Location changed to:', path);
+    console.log('Current view before change:', currentView);
+    
     if (path === '/') {
       setCurrentView('marketplace');
     } else if (path.startsWith('/cars/')) {
+      console.log('Setting view to cardetail');
       setCurrentView('cardetail');
       const id = path.split('/')[2];
+      console.log('Setting viewingCarId to:', id);
       setViewingCarId(id);
     } else if (path === '/dashboard') {
       setCurrentView('dashboard');
