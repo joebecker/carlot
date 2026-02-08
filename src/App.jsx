@@ -494,10 +494,19 @@ const CarLot = () => {
       
       console.log('Marketcheck detail response:', data);
       
-      // The response returns listings array, get the first one
+      // The response returns listings array, find the one matching our ID
       if (data && data.listings && data.listings.length > 0) {
-        const listing = data.listings[0];
+        // Try to find exact match by ID
+        let listing = data.listings.find(l => l.id === id);
+        
+        // If not found, just use first result (fallback)
+        if (!listing) {
+          console.warn('Exact ID match not found, using first result');
+          listing = data.listings[0];
+        }
+        
         console.log('Processing listing data:', listing);
+        console.log('Matched ID:', listing.id, 'vs requested:', id);
         return {
           id: listingId,
           source: 'marketcheck',
@@ -1835,6 +1844,11 @@ const CarLot = () => {
     
     // Use detailed car data if available, otherwise use basic car data
     const displayCar = detailedCar || car;
+    
+    console.log('displayCar data:', displayCar);
+    console.log('displayCar.year:', displayCar?.year);
+    console.log('displayCar.make:', displayCar?.make);
+    console.log('displayCar.model:', displayCar?.model);
     
     if (!car) {
       return (
