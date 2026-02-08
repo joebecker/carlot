@@ -460,6 +460,63 @@ const CarLot = () => {
     }
   };
 
+  // Fetch detailed information for a specific Marketcheck listing
+  const fetchMarketcheckDetails = async (listingId) => {
+    try {
+      const apiKey = 'pmPS7eHw5ULSnMbX2e9JHmSqh5VPArj6';
+      // Extract numeric ID from mk_12345 format
+      const id = listingId.replace('mk_', '');
+      
+      const url = `https://api.marketcheck.com/v2/listing/${id}?api_key=${apiKey}`;
+      console.log('Fetching listing details:', url);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data && data.listing) {
+        const listing = data.listing;
+        return {
+          id: listingId,
+          source: 'marketcheck',
+          year: listing.year,
+          make: listing.make,
+          model: listing.model,
+          trim: listing.trim || '',
+          price: listing.price,
+          mileage: listing.miles,
+          location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
+          image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
+          photos: listing.media?.photo_links || [],
+          dealer: {
+            name: listing.dealer?.name || 'Unknown Dealer',
+            phone: listing.dealer?.phone || '',
+            website: listing.dealer?.website || '',
+            address: listing.dealer?.address || '',
+            city: listing.dealer?.city || '',
+            state: listing.dealer?.state || ''
+          },
+          distance: listing.distance || 0,
+          vin: listing.vin || '',
+          fuel: listing.fuel_type || 'Gasoline',
+          transmission: listing.transmission || 'Automatic',
+          bodyType: listing.body_type || '',
+          exteriorColor: listing.exterior_color || '',
+          interiorColor: listing.interior_color || '',
+          description: listing.description || '',
+          features: listing.build?.optional_specs || [],
+          mpgCity: listing.fuel_economy?.city_mpg || null,
+          mpgHighway: listing.fuel_economy?.highway_mpg || null,
+          engine: listing.engine || '',
+          drivetrain: listing.drivetrain || ''
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Marketcheck details fetch error:', error);
+      return null;
+    }
+  };
+
   const searchCarsWithAI = async (userQuery) => {
     const query = userQuery.toLowerCase();
     
@@ -1731,6 +1788,29 @@ const CarLot = () => {
   const CarDetailPage = () => {
     // Try to find car in local listings first, then use selectedCar (for external listings)
     const car = listings.find(c => c.id === viewingCarId) || selectedCar;
+    const [detailedCar, setDetailedCar] = useState(null);
+    const [loadingDetails, setLoadingDetails] = useState(false);
+    
+    // Fetch detailed info for external listings
+    useEffect(() => {
+      const fetchDetails = async () => {
+        if (car && car.source === 'marketcheck' && viewingCarId) {
+          setLoadingDetails(true);
+          const details = await fetchMarketcheckDetails(viewingCarId);
+          if (details) {
+            setDetailedCar(details);
+          }
+          setLoadingDetails(false);
+        } else {
+          setDetailedCar(null);
+        }
+      };
+      
+      fetchDetails();
+    }, [viewingCarId, car]);
+    
+    // Use detailed car data if available, otherwise use basic car data
+    const displayCar = detailedCar || car;
     
     if (!car) {
       return (
@@ -1747,7 +1827,7 @@ const CarLot = () => {
     }
 
     // Check if this is an external listing
-    const isExternal = car.source === 'marketcheck';
+    const isExternal = displayCar.source === 'marketcheck';
 
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1762,20 +1842,27 @@ const CarLot = () => {
           Back to Listings
         </button>
 
+        {/* Loading indicator for external listings */}
+        {loadingDetails && isExternal && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm">
+            ⏳ Loading additional details and photos...
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Images and Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Main Image */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <img 
-                src={car.image} 
-                alt={`${car.year} ${car.make} ${car.model}`}
+                src={displayCar.image} 
+                alt={`${displayCar.year} ${displayCar.make} ${displayCar.model}`}
                 className="w-full h-96 object-cover"
               />
               
               {/* Thumbnail Images */}
               <div className="p-4 flex gap-2 overflow-x-auto">
-                {car.images?.map((img, idx) => (
+                {(displayCar.images || displayCar.photos)?.map((img, idx) => (
                   <img 
                     key={idx}
                     src={img}
@@ -1793,15 +1880,15 @@ const CarLot = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Make</p>
-                  <p className="font-semibold text-gray-900">{car.make}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.make}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Model</p>
-                  <p className="font-semibold text-gray-900">{car.model}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.model}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Year</p>
-                  <p className="font-semibold text-gray-900">{car.year}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.year}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Mileage</p>
@@ -1809,19 +1896,19 @@ const CarLot = () => {
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Fuel Type</p>
-                  <p className="font-semibold text-gray-900">{car.fuel}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.fuel}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Transmission</p>
-                  <p className="font-semibold text-gray-900">{car.transmission}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.transmission}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Color</p>
-                  <p className="font-semibold text-gray-900">{car.color}</p>
+                  <p className="font-semibold text-gray-900">{displayCar.color}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">VIN</p>
-                  <p className="font-semibold text-gray-900 text-sm">{car.vin}</p>
+                  <p className="font-semibold text-gray-900 text-sm">{displayCar.vin}</p>
                 </div>
               </div>
             </div>
@@ -1829,14 +1916,67 @@ const CarLot = () => {
             {/* Description */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
-              <p className="text-gray-700 leading-relaxed">{car.description}</p>
+              <p className="text-gray-700 leading-relaxed">{displayCar.description}</p>
             </div>
+
+            {/* Description (for external listings) */}
+            {isExternal && displayCar.description && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
+                <p className="text-gray-700 whitespace-pre-line">{displayCar.description}</p>
+              </div>
+            )}
+
+            {/* Additional Details (for external listings) */}
+            {isExternal && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Additional Details</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {displayCar.exteriorColor && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">Exterior Color</p>
+                      <p className="font-semibold text-gray-900">{displayCar.exteriorColor}</p>
+                    </div>
+                  )}
+                  {displayCar.interiorColor && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">Interior Color</p>
+                      <p className="font-semibold text-gray-900">{displayCar.interiorColor}</p>
+                    </div>
+                  )}
+                  {displayCar.engine && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">Engine</p>
+                      <p className="font-semibold text-gray-900">{displayCar.engine}</p>
+                    </div>
+                  )}
+                  {displayCar.drivetrain && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">Drivetrain</p>
+                      <p className="font-semibold text-gray-900">{displayCar.drivetrain}</p>
+                    </div>
+                  )}
+                  {displayCar.mpgCity && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">MPG City</p>
+                      <p className="font-semibold text-gray-900">{displayCar.mpgCity} mpg</p>
+                    </div>
+                  )}
+                  {displayCar.mpgHighway && (
+                    <div className="border-b border-gray-200 pb-3">
+                      <p className="text-sm text-gray-500">MPG Highway</p>
+                      <p className="font-semibold text-gray-900">{displayCar.mpgHighway} mpg</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Features */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Features</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {car.features?.map((feature, idx) => (
+                {displayCar.features?.map((feature, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1852,7 +1992,7 @@ const CarLot = () => {
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Location</h2>
               <div className="flex items-center gap-2 text-gray-700">
                 <MapPin size={20} className="text-blue-600" />
-                <span>{car.location}</span>
+                <span>{displayCar.location}</span>
               </div>
             </div>
           </div>
@@ -1867,7 +2007,7 @@ const CarLot = () => {
                   <p className="text-4xl font-bold text-blue-600">{formatPrice(car.price)}</p>
                 </div>
 
-                {car.featured && (
+                {displayCar.featured && (
                   <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-800 font-medium">⭐ Featured Listing</p>
                   </div>
@@ -1922,15 +2062,15 @@ const CarLot = () => {
                   </div>
                   {isExternal ? (
                     <>
-                      {car.dealer?.phone && (
+                      {displayCar.dealer?.phone && (
                         <div className="flex items-center gap-2 text-gray-700">
                           <Phone size={18} className="text-blue-600" />
-                          <span>{car.dealer.phone}</span>
+                          <span>{displayCar.dealer.phone}</span>
                         </div>
                       )}
-                      {car.dealer?.website && (
+                      {displayCar.dealer?.website && (
                         <a 
-                          href={car.dealer.website}
+                          href={displayCar.dealer.website}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
@@ -1939,7 +2079,7 @@ const CarLot = () => {
                           <span>Visit Dealer Website</span>
                         </a>
                       )}
-                      {car.distance && (
+                      {displayCar.distance && (
                         <div className="text-sm text-gray-600">
                           📍 {Math.round(car.distance)} miles away
                         </div>
@@ -1949,11 +2089,11 @@ const CarLot = () => {
                     <>
                       <div className="flex items-center gap-2 text-gray-700">
                         <Phone size={18} className="text-blue-600" />
-                        <span>{car.sellerPhone}</span>
+                        <span>{displayCar.sellerPhone}</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700">
                         <Mail size={18} className="text-blue-600" />
-                        <span className="text-sm">{car.sellerEmail}</span>
+                        <span className="text-sm">{displayCar.sellerEmail}</span>
                       </div>
                     </>
                   )}
