@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -42,23 +42,6 @@ const CarLot = () => {
   const [isUpdatingVehicleData, setIsUpdatingVehicleData] = useState(false);
   const [vinDecoding, setVinDecoding] = useState(false);
 
-  // AI Chat Bot
-  const [showChatBot, setShowChatBot] = useState(false);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const [isAITyping, setIsAITyping] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [conversationId, setConversationId] = useState(null);
-
-  // Monetization tracking
-  const [searchAnalytics, setSearchAnalytics] = useState({
-    totalSearches: 0,
-    cpcClicks: 0,
-    leadsGenerated: 0,
-    trucarClicks: 0,
-    revenue: 0
-  });
-
   // Vehicle body types
   const bodyTypes = [
     'Sedan', 'Coupe', 'Hatchback', 'Wagon', 'Convertible',
@@ -79,185 +62,6 @@ const CarLot = () => {
       lastReportedMileage: Math.floor(Math.random() * 100000) + 10000,
     };
   };
-
-  // Get user location
-  const getUserLocationData = async () => {
-    if (userLocation) return userLocation;
-
-    try {
-      // Try browser geolocation first
-      if (navigator.geolocation) {
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject);
-        });
-
-        const location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-
-        setUserLocation(location);
-        return location;
-      }
-    } catch (error) {
-      console.log('Geolocation denied, using IP fallback');
-    }
-
-    // Fallback to IP geolocation
-    try {
-      const response = await fetch('https://ipapi.co/json/');
-      const data = await response.json();
-      
-      const location = {
-        city: data.city,
-        state: data.region_code,
-        zip: data.postal,
-        lat: data.latitude,
-        lng: data.longitude
-      };
-
-      setUserLocation(location);
-      return location;
-    } catch (error) {
-      console.error('Could not get location:', error);
-      return null;
-    }
-  };
-
-  // AI-powered car search (local only for now)
-  const searchCarsWithAI = async (userQuery) => {
-    const location = await getUserLocationData();
-    
-    // Parse user query for key terms
-    const query = userQuery.toLowerCase();
-    let make = null;
-    let model = null;
-    let priceMax = null;
-    
-    // Extract make
-    vehicleMakes.forEach(m => {
-      if (query.includes(m.toLowerCase())) {
-        make = m;
-      }
-    });
-    
-    // Extract price
-    const priceMatch = query.match(/under \$?(\d+)k?/i);
-    if (priceMatch) {
-      priceMax = parseInt(priceMatch[1]) * (priceMatch[1].length <= 2 ? 1000 : 1);
-    }
-    
-    // STEP 1: Search YOUR listings first (highest margin)
-    const localResults = listings.filter(car => {
-      let matches = true;
-      
-      if (make && car.make.toLowerCase() !== make.toLowerCase()) matches = false;
-      if (priceMax && car.price > priceMax) matches = false;
-      
-      // General keyword search
-      const searchText = `${car.make} ${car.model} ${car.description || ''}`.toLowerCase();
-      const keywords = query.split(' ').filter(w => w.length > 3);
-      keywords.forEach(keyword => {
-        if (!searchText.includes(keyword)) matches = false;
-      });
-      
-      return matches;
-    }).slice(0, 10);
-
-    return {
-      internal: localResults,
-      external: [],
-      location: location,
-      totalInternal: localResults.length,
-      totalExternal: 0
-    };
-  };
-
-  // Handle chat messages
-  const handleChatMessage = async (message) => {
-    if (!message.trim()) return;
-
-    // Add user message
-    const userMsg = {
-      id: Date.now(),
-      role: 'user',
-      content: message,
-      timestamp: new Date()
-    };
-
-    setChatMessages(prev => [...prev, userMsg]);
-    setChatInput('');
-    setIsAITyping(true);
-
-    try {
-      // Search for cars
-      const searchResults = await searchCarsWithAI(message);
-      
-      // Generate AI response
-      let aiResponse = '';
-      let allCars = [];
-      
-      // Show YOUR listings
-      if (searchResults.internal.length > 0) {
-        aiResponse += `I found ${searchResults.internal.length} great options for you!\n\n`;
-        
-        searchResults.internal.forEach((car, idx) => {
-          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
-          aiResponse += `   📍 ${car.location} • ${formatMileage(car.mileage)} miles\n\n`;
-        });
-        
-        allCars = [...searchResults.internal];
-        aiResponse += `\n💬 Click any car to see details, or refine your search!`;
-      } else {
-        aiResponse = `I couldn't find any exact matches for "${message}".\n\n`;
-        aiResponse += `💡 Try being more specific:\n`;
-        aiResponse += `• "Honda Accord under $25k"\n`;
-        aiResponse += `• "SUVs with low mileage"\n`;
-        aiResponse += `• "Reliable sedans"\n`;
-      }
-
-      // Add AI message with results
-      const aiMsg = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: aiResponse,
-        cars: allCars,
-        internal: searchResults.internal,
-        external: searchResults.external,
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, aiMsg]);
-      setIsAITyping(false);
-
-    } catch (error) {
-      console.error('Chat error:', error);
-      
-      const errorMsg = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again!',
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, errorMsg]);
-      setIsAITyping(false);
-    }
-  };
-
-  // Initialize chat with greeting
-  useEffect(() => {
-    if (showChatBot && chatMessages.length === 0) {
-      const greeting = {
-        id: Date.now(),
-        role: 'assistant',
-        content: `Hi! I'm your AI car shopping assistant. 🚗\n\nI can help you find the perfect car! Just tell me what you're looking for.\n\nFor example:\n• "I need a reliable family SUV"\n• "Show me trucks under $35k"\n• "Looking for a fuel-efficient sedan"`,
-        timestamp: new Date()
-      };
-      setChatMessages([greeting]);
-    }
-  }, [showChatBot]);
 
   // Load vehicle data from localStorage on mount
   useEffect(() => {
@@ -1165,156 +969,6 @@ const CarLot = () => {
               <LogOut size={18} />
               Sign Out
             </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // AI ChatBot Component
-  const AIChatBot = () => {
-    const messagesEndRef = useRef(null);
-
-    const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-      scrollToBottom();
-    }, [chatMessages]);
-
-    if (!showChatBot) {
-      return (
-        <button
-          onClick={() => setShowChatBot(true)}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition z-50 flex items-center gap-2"
-        >
-          <MessageSquare size={24} />
-          <span className="font-medium">AI Car Finder</span>
-        </button>
-      );
-    }
-
-    return (
-      <div className="fixed bottom-6 right-6 w-96 bg-white rounded-lg shadow-2xl z-50 flex flex-col" style={{height: '600px'}}>
-        {/* Header */}
-        <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={20} />
-            <div>
-              <h3 className="font-bold">AI Car Finder</h3>
-              <p className="text-xs text-blue-100">Powered by Claude AI</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowChatBot(false)}
-            className="text-white hover:bg-blue-700 p-1 rounded"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {chatMessages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-lg p-3 ${
-                msg.role === 'user' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-100 text-gray-900'
-              }`}>
-                <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
-                
-                {/* Show car results */}
-                {msg.cars && msg.cars.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {msg.cars.map((car) => (
-                      <div
-                        key={car.id}
-                        className="bg-white text-gray-900 p-3 rounded border border-gray-200"
-                      >
-                        <div className="flex gap-2 mb-2">
-                          <img 
-                            src={car.image} 
-                            alt={`${car.year} ${car.make} ${car.model}`}
-                            className="w-20 h-20 object-cover rounded"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-sm truncate">
-                              {car.year} {car.make} {car.model}
-                            </div>
-                            <div className="text-blue-600 font-bold text-sm">
-                              {formatPrice(car.price)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {car.location}
-                              {car.source === 'marketcheck' && ` • ${Math.round(car.distance)}mi`}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 text-xs">
-                          <button
-                            onClick={() => {
-                              setViewingCarId(car.id);
-                              setCurrentView('cardetail');
-                              setShowChatBot(false);
-                            }}
-                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            View Details →
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          {isAITyping && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg p-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="border-t border-gray-200 p-4">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleChatMessage(chatInput);
-          }}>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Describe your dream car..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={!chatInput.trim() || isAITyping}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                <Send size={20} />
-              </button>
-            </div>
-          </form>
-          
-          <div className="text-xs text-gray-500 mt-2 text-center">
-            💡 Try: "SUVs under $30k" or "reliable sedans"
           </div>
         </div>
       </div>
@@ -2595,23 +2249,11 @@ const CarLot = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm">AI Searches</p>
-                <p className="text-3xl font-bold text-gray-900">{searchAnalytics.totalSearches}</p>
-              </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <MessageSquare className="text-green-600" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center justify-between">
-              <div>
                 <p className="text-gray-500 text-sm">Total Users</p>
                 <p className="text-3xl font-bold text-gray-900">{users.length || '—'}</p>
               </div>
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <User className="text-purple-600" size={24} />
+              <div className="bg-green-100 p-3 rounded-lg">
+                <User className="text-green-600" size={24} />
               </div>
             </div>
           </div>
@@ -2621,6 +2263,18 @@ const CarLot = () => {
               <div>
                 <p className="text-gray-500 text-sm">Inquiries</p>
                 <p className="text-3xl font-bold text-gray-900">156</p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <MessageSquare className="text-purple-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm">Revenue</p>
+                <p className="text-3xl font-bold text-gray-900">$2.4k</p>
               </div>
               <div className="bg-yellow-100 p-3 rounded-lg">
                 <DollarSign className="text-yellow-600" size={24} />
@@ -3827,9 +3481,6 @@ const CarLot = () => {
         <ContactModal car={selectedCar} onClose={() => setShowContactModal(false)} />
       )}
 
-      {/* AI ChatBot */}
-      <AIChatBot />
-
       {/* Loading State */}
       {loading && (
         <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
@@ -3925,6 +3576,14 @@ const CarLot = () => {
       </footer>
     </div>
   );
-}
+};
+
+// Missing Eye import - adding it here
+const Eye = ({ size, className }) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
 
 export default CarLot;
