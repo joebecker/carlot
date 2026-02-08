@@ -414,9 +414,9 @@ const CarLot = () => {
 
   const searchMarketcheck = async ({ make, model, zip, latitude, longitude, radius = 50, priceMax, limit = 10 }) => {
     try {
-      // Use import.meta.env directly instead of constant
-      const apiKey = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
-      console.log('Marketcheck API Key:', apiKey ? 'Loaded' : 'Not Loaded');
+      // TEMPORARY: Hardcoded API key - REPLACE THIS with your actual key
+      const apiKey = 'pmPS7eHw5ULSnMbX2e9JHmSqh5VPArj6'; // <-- PUT YOUR KEY HERE
+      console.log('Using API Key (first 10 chars):', apiKey.substring(0, 10));
       
       let url = `https://api.marketcheck.com/v2/search/car/active?api_key=${apiKey}`;
       
