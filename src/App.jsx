@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,6 +27,7 @@ const CarLot = () => {
   
   const navigate = useNavigate();
   const params = useParams();
+  const location = useLocation();
   // Auth states
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -158,8 +159,37 @@ const CarLot = () => {
       showNotification('error', 'Database not configured. Please add Supabase credentials.');
   
   // Sync URL with currentView
+  // Sync URL with currentView on mount and when URL changes
   useEffect(() => {
-    const path = window.location.pathname;
+    const syncUrlToState = () => {
+      const path = window.location.pathname;
+      if (path === '/') {
+        setCurrentView('marketplace');
+      } else if (path.startsWith('/cars/')) {
+        setCurrentView('cardetail');
+        const id = path.split('/')[2];
+        setViewingCarId(id);
+      } else if (path === '/dashboard') {
+        setCurrentView('dashboard');
+      } else if (path === '/financing') {
+        setCurrentView('financing');
+      } else if (path === '/admin') {
+        setCurrentView('admin');
+      }
+    };
+
+    // Sync on mount
+    syncUrlToState();
+
+    // Listen for URL changes (browser back/forward)
+    window.addEventListener('popstate', syncUrlToState);
+    
+    return () => window.removeEventListener('popstate', syncUrlToState);
+  }, []);
+
+  // Watch for location changes from react-router
+  useEffect(() => {
+    const path = location.pathname;
     if (path === '/') {
       setCurrentView('marketplace');
     } else if (path.startsWith('/cars/')) {
@@ -173,7 +203,7 @@ const CarLot = () => {
     } else if (path === '/admin') {
       setCurrentView('admin');
     }
-  }, []);
+  }, [location]);
 
   // Update URL when currentView changes
   useEffect(() => {
