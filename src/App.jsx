@@ -598,6 +598,7 @@ const CarLot = () => {
   // AI ChatBot Component
   const AIChatBot = () => {
     const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
 
     const scrollToBottom = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -606,6 +607,13 @@ const CarLot = () => {
     useEffect(() => {
       scrollToBottom();
     }, [chatMessages]);
+
+    useEffect(() => {
+      // Keep focus on input when typing
+      if (showChatBot && inputRef.current && document.activeElement !== inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, [chatInput, showChatBot]);
 
     if (!showChatBot) {
       return (
@@ -704,6 +712,7 @@ const CarLot = () => {
           }}>
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
