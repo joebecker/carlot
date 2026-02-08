@@ -441,16 +441,33 @@ const CarLot = () => {
           year: listing.year,
           make: listing.make,
           model: listing.model,
+          trim: listing.trim || '',
           price: listing.price,
           mileage: listing.miles,
           location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
           image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
+          photos: listing.media?.photo_links || [],
           dealer: {
             name: listing.dealer?.name || 'Unknown Dealer',
             phone: listing.dealer?.phone || '',
-            website: listing.dealer?.website || ''
+            website: listing.dealer?.website || '',
+            address: listing.dealer?.address || '',
+            city: listing.dealer?.city || '',
+            state: listing.dealer?.state || ''
           },
-          distance: listing.distance || 0
+          distance: listing.distance || 0,
+          vin: listing.vin || '',
+          fuel: listing.fuel_type || 'Gasoline',
+          transmission: listing.transmission || 'Automatic',
+          bodyType: listing.body_type || '',
+          exteriorColor: listing.exterior_color || '',
+          interiorColor: listing.interior_color || '',
+          description: listing.comment || listing.description || '',
+          features: listing.build?.optional_specs || listing.features || [],
+          mpgCity: listing.fuel_economy?.city_mpg || null,
+          mpgHighway: listing.fuel_economy?.highway_mpg || null,
+          engine: listing.engine || '',
+          drivetrain: listing.drivetrain || ''
         }));
       }
       return [];
@@ -467,8 +484,8 @@ const CarLot = () => {
       // Extract the actual Marketcheck ID (remove mk_ prefix)
       const id = listingId.replace('mk_', '');
       
-      // Correct endpoint is /v2/listings/{id} (plural)
-      const url = `https://api.marketcheck.com/v2/listings/${id}?api_key=${apiKey}`;
+      // Try the car/active endpoint with the specific ID
+      const url = `https://api.marketcheck.com/v2/search/car/active?api_key=${apiKey}&id=${id}`;
       console.log('Fetching listing details for ID:', id);
       console.log('Full URL:', url);
       
@@ -477,8 +494,9 @@ const CarLot = () => {
       
       console.log('Marketcheck detail response:', data);
       
-      if (data && data.listing) {
-        const listing = data.listing;
+      // The response returns listings array, get the first one
+      if (data && data.listings && data.listings.length > 0) {
+        const listing = data.listings[0];
         console.log('Processing listing data:', listing);
         return {
           id: listingId,
