@@ -369,6 +369,7 @@ const CarLot = () => {
   // Financing Calculator Logic
 
   // AI car search function
+  const inputRef = useRef(null);
   const searchCarsWithAI = async (userQuery) => {
     const query = userQuery.toLowerCase();
     
@@ -594,144 +595,6 @@ const CarLot = () => {
   };
 
   // Contact Modal Component
-
-  // AI ChatBot Component
-  const AIChatBot = () => {
-    const messagesEndRef = useRef(null);
-    const inputRef = useRef(null);
-
-    const scrollToBottom = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-      scrollToBottom();
-    }, [chatMessages]);
-
-    useEffect(() => {
-      // Keep focus on input when typing
-      if (showChatBot && inputRef.current && document.activeElement !== inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, [chatInput, showChatBot]);
-
-    if (!showChatBot) {
-      return (
-        <button
-          onClick={() => setShowChatBot(true)}
-          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition z-50 flex items-center gap-2"
-        >
-          <MessageSquare size={24} />
-          <span className="font-medium">AI Car Finder</span>
-        </button>
-      );
-    }
-
-    return (
-      <div className="fixed bottom-6 right-6 w-96 bg-white rounded-lg shadow-2xl z-50 flex flex-col" style={{height: '600px'}}>
-        <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={20} />
-            <h3 className="font-bold">AI Car Finder</h3>
-          </div>
-          <button
-            onClick={() => setShowChatBot(false)}
-            className="text-white hover:bg-blue-700 p-1 rounded"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {chatMessages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-lg p-3 ${
-                msg.role === 'user' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-100 text-gray-900'
-              }`}>
-                <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
-                
-                {msg.cars && msg.cars.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {msg.cars.map((car) => (
-                      <button
-                        key={car.id}
-                        onClick={() => {
-                          setViewingCarId(car.id);
-                          setCurrentView('cardetail');
-                          setShowChatBot(false);
-                        }}
-                        className="w-full bg-white text-gray-900 p-2 rounded border border-gray-200 hover:border-blue-500 transition text-left"
-                      >
-                        <div className="flex gap-2">
-                          <img 
-                            src={car.image} 
-                            alt={`${car.year} ${car.make} ${car.model}`}
-                            className="w-16 h-16 object-cover rounded"
-                          />
-                          <div className="flex-1">
-                            <div className="font-semibold text-sm">
-                              {car.year} {car.make} {car.model}
-                            </div>
-                            <div className="text-blue-600 font-bold text-sm">
-                              {formatPrice(car.price)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Click to view →
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          
-          {isAITyping && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg p-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="border-t border-gray-200 p-4">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleChatMessage(chatInput);
-          }}>
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="What car are you looking for?"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={!chatInput.trim() || isAITyping}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
-              >
-                <Send size={20} />
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
 
   const ContactModal = ({ car, onClose }) => {
     const [formData, setFormData] = useState({
@@ -2084,22 +1947,141 @@ const CarLot = () => {
                 <h2 className="text-4xl sm:text-5xl font-bold mb-4">Find Your Perfect Car</h2>
                 <p className="text-xl mb-8 text-blue-100">Browse thousands of quality vehicles from trusted sellers</p>
                 
-                {/* Search Bar */}
+                {/* Search Bar with AI Toggle */}
                 <div className="max-w-3xl mx-auto">
-                  <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                      <input
-                        type="text"
-                        placeholder="Search by make, model..."
-                        className="w-full pl-10 pr-4 py-3 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
+                  <div className="bg-white rounded-lg shadow-lg p-2">
+                    {/* Toggle Buttons */}
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        onClick={() => setShowChatBot(false)}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
+                          !showChatBot 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        🔍 Standard Search
+                      </button>
+                      <button
+                        onClick={() => setShowChatBot(true)}
+                        className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
+                          showChatBot 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        🤖 AI Assistant
+                      </button>
                     </div>
-                    <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition">
-                      Search
-                    </button>
+
+                    {/* Standard Search */}
+                    {!showChatBot && (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="flex-1 relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                          <input
+                            type="text"
+                            placeholder="Search by make, model..."
+                            className="w-full pl-10 pr-4 py-3 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                        <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition">
+                          Search
+                        </button>
+                      </div>
+                    )}
+
+                    {/* AI Chat Interface */}
+                    {showChatBot && (
+                      <div className="space-y-4">
+                        {/* Chat Messages */}
+                        <div className="h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg space-y-4">
+                          {chatMessages.map((msg) => (
+                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[80%] rounded-lg p-3 ${
+                                msg.role === 'user' 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-white text-gray-900 shadow-sm'
+                              }`}>
+                                <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                                
+                                {msg.cars && msg.cars.length > 0 && (
+                                  <div className="mt-3 space-y-2">
+                                    {msg.cars.map((car) => (
+                                      <button
+                                        key={car.id}
+                                        onClick={() => {
+                                          setViewingCarId(car.id);
+                                          setCurrentView('cardetail');
+                                        }}
+                                        className="w-full bg-gray-50 text-gray-900 p-2 rounded border border-gray-200 hover:border-blue-500 transition text-left"
+                                      >
+                                        <div className="flex gap-2">
+                                          <img 
+                                            src={car.image} 
+                                            alt={`${car.year} ${car.make} ${car.model}`}
+                                            className="w-16 h-16 object-cover rounded"
+                                          />
+                                          <div className="flex-1">
+                                            <div className="font-semibold text-sm">
+                                              {car.year} {car.make} {car.model}
+                                            </div>
+                                            <div className="text-blue-600 font-bold text-sm">
+                                              {formatPrice(car.price)}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                              Click to view →
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {isAITyping && (
+                            <div className="flex justify-start">
+                              <div className="bg-white rounded-lg p-3 shadow-sm">
+                                <div className="flex gap-1">
+                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Chat Input */}
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          handleChatMessage(chatInput);
+                        }}>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={chatInput}
+                              onChange={(e) => setChatInput(e.target.value)}
+                              placeholder="Ask me anything... 'Show me Honda Accords under $25k'"
+                              className="flex-1 px-4 py-3 text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!chatInput.trim() || isAITyping}
+                              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 font-medium transition flex items-center gap-2"
+                            >
+                              <Send size={20} />
+                              Send
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2261,11 +2243,6 @@ const CarLot = () => {
       {showContactModal && selectedCar && (
         <ContactModal car={selectedCar} onClose={() => setShowContactModal(false)} />
       )}
-
-      {/* AI ChatBot */}
-      <AIChatBot />
-
-
       {/* Loading State */}
       {loading && (
         <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
