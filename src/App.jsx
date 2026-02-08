@@ -7,12 +7,14 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-// Marketcheck API Configuration
-const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
-const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
-
 
 const CarLot = () => {
+  // Marketcheck API Configuration (must be inside component for Vite env vars)
+  const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
+  const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
+  
+  console.log('API Key check:', MARKETCHECK_API_KEY === 'PLACEHOLDER_KEY' ? 'NOT LOADED' : 'LOADED');
+  
   // Auth states
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
