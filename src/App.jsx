@@ -1832,9 +1832,6 @@ const CarLot = () => {
     console.log('displayCar.exteriorColor:', displayCar?.exteriorColor);
     
     if (!car) {
-    console.log('displayCar.model:', displayCar?.model);
-    
-    if (!car) {
       return (
         <div className="max-w-7xl mx-auto px-4 py-8 text-center">
           <p>Car not found</p>
@@ -1851,6 +1848,7 @@ const CarLot = () => {
     // Check if this is an external listing
     const isExternal = displayCar.source === 'marketcheck';
 
+    return (
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
