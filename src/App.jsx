@@ -7,6 +7,11 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
+// Marketcheck API Configuration
+const MARKETCHECK_API_KEY = import.meta.env.VITE_MARKETCHECK_API_KEY || 'PLACEHOLDER_KEY';
+const MARKETCHECK_BASE_URL = 'https://api.marketcheck.com/v2';
+
+
 const CarLot = () => {
   // Auth states
   const [user, setUser] = useState(null);
@@ -370,16 +375,130 @@ const CarLot = () => {
 
   // AI car search function
   const inputRef = useRef(null);
+
+  // Marketcheck API Helper
+
+  // Get user location for search
+  const getUserLocation = async () => {
+    try {
+      // Try browser geolocation first
+      if (navigator.geolocation) {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        return {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+      }
+    } catch (error) {
+      console.log('Geolocation denied or unavailable');
+    }
+
+    // Fallback to IP geolocation
+    try {
+      const response = await fetch('https://ipapi.co/json/');
+      const data = await response.json();
+      return {
+        zip: data.postal,
+        lat: data.latitude,
+        lng: data.longitude
+      };
+    } catch (error) {
+      console.error('Could not get location:', error);
+      return null;
+    }
+  };
+
+  const searchMarketcheck = async ({ make, model, zip, latitude, longitude, radius = 50, priceMax, limit = 10 }) => {
+    try {
+      let url = `${MARKETCHECK_BASE_URL}/search/car/active?api_key=${MARKETCHECK_API_KEY}`;
+      
+      if (make) url += `&make=${encodeURIComponent(make)}`;
+      if (model) url += `&model=${encodeURIComponent(model)}`;
+      if (zip) url += `&zip=${zip}`;
+      if (latitude && longitude) url += `&latitude=${latitude}&longitude=${longitude}`;
+      if (radius) url += `&radius=${radius}`;
+      if (priceMax) url += `&price_max=${priceMax}`;
+      url += `&rows=${limit}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.listings) {
+        return data.listings.map(listing => ({
+          id: `mk_${listing.id}`,
+          source: 'marketcheck',
+          year: listing.year,
+          make: listing.make,
+          model: listing.model,
+          price: listing.price,
+          mileage: listing.miles,
+          location: `${listing.dealer?.city || ''}, ${listing.dealer?.state || ''}`,
+          image: listing.media?.photo_links?.[0] || 'https://via.placeholder.com/400x300?text=No+Image',
+          dealer: {
+            name: listing.dealer?.name || 'Unknown Dealer',
+            phone: listing.dealer?.phone || '',
+            website: listing.dealer?.website || ''
+          },
+          distance: listing.distance || 0
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Marketcheck API error:', error);
+      return [];
+    }
+  };
+
   const searchCarsWithAI = async (userQuery) => {
     const query = userQuery.toLowerCase();
     
-    // Simple keyword search in your listings
-    const results = listings.filter(car => {
+    // Parse query
+    let make = null;
+    let priceMax = null;
+    
+    // Extract make from query
+    const commonMakes = ['toyota', 'honda', 'ford', 'chevrolet', 'nissan', 'bmw', 'mercedes', 'audi', 'tesla', 'jeep'];
+    commonMakes.forEach(m => {
+      if (query.includes(m)) make = m;
+    });
+    
+    // Extract price
+    const priceMatch = query.match(/under \$?(\d+)k?/i);
+    if (priceMatch) {
+      priceMax = parseInt(priceMatch[1]) * (priceMatch[1].length <= 2 ? 1000 : 1);
+    }
+    
+    // Search YOUR listings first
+    const localResults = listings.filter(car => {
       const searchText = `${car.year} ${car.make} ${car.model} ${car.description || ''}`.toLowerCase();
       return searchText.includes(query);
     }).slice(0, 5);
     
-    return results;
+    // Search Marketcheck for more options
+    let externalResults = [];
+    try {
+      const location = await getUserLocation();
+      if (location) {
+        externalResults = await searchMarketcheck({
+          make,
+          priceMax,
+          zip: location.zip,
+          latitude: location.lat,
+          longitude: location.lng,
+          radius: 50,
+          limit: 5
+        });
+      }
+    } catch (error) {
+      console.error('External search failed:', error);
+    }
+    
+    return {
+      internal: localResults,
+      external: externalResults
+    };
   };
 
   // Handle chat messages
@@ -401,22 +520,39 @@ const CarLot = () => {
       const results = await searchCarsWithAI(message);
       
       let aiResponse = '';
+      let allCars = [];
       
-      if (results.length > 0) {
-        aiResponse = `I found ${results.length} options for you!\n\n`;
-        results.forEach((car, idx) => {
+      // Show internal results
+      if (results.internal && results.internal.length > 0) {
+        aiResponse = `🏠 **FROM OUR INVENTORY** (${results.internal.length}):\n\n`;
+        results.internal.forEach((car, idx) => {
           aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
         });
-        aiResponse += `\nClick any car above to see details!`;
+        allCars = [...results.internal];
+      }
+      
+      // Show external results
+      if (results.external && results.external.length > 0) {
+        if (aiResponse) aiResponse += '\n';
+        aiResponse += `🌐 **FROM NEARBY DEALERS** (${results.external.length}):\n\n`;
+        results.external.forEach((car, idx) => {
+          aiResponse += `${idx + 1}. ${car.year} ${car.make} ${car.model} - ${formatPrice(car.price)}\n`;
+          aiResponse += `   📍 ${car.dealer.name} • ${Math.round(car.distance)}mi away\n`;
+        });
+        allCars = [...allCars, ...results.external];
+      }
+      
+      if (allCars.length === 0) {
+        aiResponse = `I couldn't find matches for "${message}". Try:\n• "Honda Accord"\n• "SUVs under $30k"\n• "Toyota near me"`;
       } else {
-        aiResponse = `I couldn't find matches for "${message}". Try searching for a make, model, or type like "Honda", "SUV", or "under $25k"`;
+        aiResponse += `\n💬 Click any car to see details!`;
       }
 
       const aiMsg = {
         id: Date.now() + 1,
         role: 'assistant',
         content: aiResponse,
-        cars: results,
+        cars: allCars,
         timestamp: new Date()
       };
 
