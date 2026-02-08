@@ -1,6 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
+import { Search, MapPin, DollarSign, Calendar, Gauge, Fuel, Heart, Filter, Menu, X, Plus, Edit, Trash2, BarChart3, Calculator, Mail, Phone, User, MessageSquare, LogOut, LogIn, Send, Eye } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+// Helper function to create SEO-friendly URL slugs
+const createCarSlug = (car) => {
+  if (!car) return '';
+  return `${car.year || 'car'}-${car.make || ''}-${car.model || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+};
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -15,6 +28,8 @@ const CarLot = () => {
   
   console.log('API Key check:', MARKETCHECK_API_KEY === 'PLACEHOLDER_KEY' ? 'NOT LOADED' : 'LOADED');
   
+  const navigate = useNavigate();
+  const params = useParams();
   // Auth states
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -144,6 +159,42 @@ const CarLot = () => {
   const handleForgotPassword = async (email) => {
     if (!supabase) {
       showNotification('error', 'Database not configured. Please add Supabase credentials.');
+  
+  // Sync URL with currentView
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/') {
+      setCurrentView('marketplace');
+    } else if (path.startsWith('/cars/')) {
+      setCurrentView('cardetail');
+      const id = path.split('/')[2];
+      setViewingCarId(id);
+    } else if (path === '/dashboard') {
+      setCurrentView('dashboard');
+    } else if (path === '/financing') {
+      setCurrentView('financing');
+    } else if (path === '/admin') {
+      setCurrentView('admin');
+    }
+  }, [window.location.pathname]);
+
+  // Update URL when currentView changes
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    if (currentView === 'marketplace' && currentPath !== '/') {
+      navigate('/', { replace: true });
+    } else if (currentView === 'dashboard' && currentPath !== '/dashboard') {
+      navigate('/dashboard', { replace: true });
+    } else if (currentView === 'financing' && currentPath !== '/financing') {
+      navigate('/financing', { replace: true });
+    } else if (currentView === 'admin' && currentPath !== '/admin') {
+      navigate('/admin', { replace: true });
+    } else if (currentView === 'cardetail' && !currentPath.startsWith('/cars/')) {
+      if (viewingCarId && selectedCar) {
+        navigate(`/cars/${viewingCarId}/${createCarSlug(selectedCar)}`, { replace: true });
+      }
+    }
+  }, [currentView, viewingCarId, selectedCar]);
       return;
     }
     
@@ -2361,7 +2412,7 @@ const CarLot = () => {
                                         onClick={() => {
                                           setViewingCarId(car.id);
                                           setSelectedCar(car);
-                                          setCurrentView('cardetail');
+                                          navigate(`/cars/${car.id}/${createCarSlug(car)}`);
                                         }}
                                         className="w-full bg-gray-50 text-gray-900 p-2 rounded border border-gray-200 hover:border-blue-500 transition text-left"
                                       >
@@ -2532,7 +2583,9 @@ const CarLot = () => {
                       <button 
                         onClick={() => {
                           setViewingCarId(car.id);
-                          setCurrentView('cardetail');
+                          setSelectedCar(car);
+                          navigate(`/cars/${car.id}/${createCarSlug(car)}`);
+
                         }}
                         className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
                       >
@@ -2688,4 +2741,11 @@ const CarLot = () => {
 };
 
 
-export default CarLot;
+
+const App = () => (
+  <Router>
+    <CarLot />
+  </Router>
+);
+
+export default App;
