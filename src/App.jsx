@@ -1813,6 +1813,7 @@ const CarLot = () => {
     const car = listings.find(c => c.id === viewingCarId) || selectedCar;
     const [detailedCar, setDetailedCar] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
+    const [selectedImage, setSelectedImage] = useState(null);
     
     // Fetch detailed info for external listings
     useEffect(() => {
@@ -1878,22 +1879,27 @@ const CarLot = () => {
             {/* Main Image */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <img 
-                src={displayCar.image} 
+                src={selectedImage || displayCar.image} 
                 alt={`${displayCar.year} ${displayCar.make} ${displayCar.model}`}
                 className="w-full h-96 object-cover"
               />
               
               {/* Thumbnail Images */}
-              <div className="p-4 flex gap-2 overflow-x-auto">
-                {(displayCar.images || displayCar.photos)?.map((img, idx) => (
-                  <img 
-                    key={idx}
-                    src={img}
-                    alt={`View ${idx + 1}`}
-                    className="w-24 h-24 object-cover rounded cursor-pointer hover:opacity-75"
-                  />
-                ))}
-              </div>
+              {(displayCar.images || displayCar.photos) && (displayCar.images || displayCar.photos).length > 0 && (
+                <div className="p-4 flex gap-2 overflow-x-auto">
+                  {(displayCar.images || displayCar.photos)?.map((img, idx) => (
+                    <img 
+                      key={idx}
+                      src={img}
+                      alt={`View ${idx + 1}`}
+                      onClick={() => setSelectedImage(img)}
+                      className={`w-24 h-24 object-cover rounded cursor-pointer hover:opacity-75 transition ${
+                        selectedImage === img ? 'ring-2 ring-blue-600' : ''
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Vehicle Details */}
@@ -1996,19 +2002,21 @@ const CarLot = () => {
             )}
 
             {/* Features */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Features</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {displayCar.features?.map((feature, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-gray-700">{feature}</span>
-                  </div>
-                ))}
+            {displayCar.features && displayCar.features.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Features</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {displayCar.features?.map((feature, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-gray-700">{feature}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Location */}
             <div className="bg-white rounded-lg shadow-md p-6">
