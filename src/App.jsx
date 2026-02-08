@@ -1908,6 +1908,10 @@ const CarLot = () => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="border-b border-gray-200 pb-3">
+                  <p className="text-sm text-gray-500">Year</p>
+                  <p className="font-semibold text-gray-900">{displayCar.year}</p>
+                </div>
+                <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Make</p>
                   <p className="font-semibold text-gray-900">{displayCar.make}</p>
                 </div>
@@ -1916,13 +1920,21 @@ const CarLot = () => {
                   <p className="font-semibold text-gray-900">{displayCar.model}</p>
                 </div>
                 <div className="border-b border-gray-200 pb-3">
-                  <p className="text-sm text-gray-500">Year</p>
-                  <p className="font-semibold text-gray-900">{displayCar.year}</p>
-                </div>
-                <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Mileage</p>
-                  <p className="font-semibold text-gray-900">{formatMileage(car.mileage)} miles</p>
+                  <p className="font-semibold text-gray-900">{formatMileage(displayCar.mileage)} miles</p>
                 </div>
+                {(displayCar.color || displayCar.exteriorColor) && (
+                  <div className="border-b border-gray-200 pb-3">
+                    <p className="text-sm text-gray-500">Exterior Color</p>
+                    <p className="font-semibold text-gray-900">{displayCar.exteriorColor || displayCar.color}</p>
+                  </div>
+                )}
+                {displayCar.interiorColor && (
+                  <div className="border-b border-gray-200 pb-3">
+                    <p className="text-sm text-gray-500">Interior Color</p>
+                    <p className="font-semibold text-gray-900">{displayCar.interiorColor}</p>
+                  </div>
+                )}
                 <div className="border-b border-gray-200 pb-3">
                   <p className="text-sm text-gray-500">Fuel Type</p>
                   <p className="font-semibold text-gray-900">{displayCar.fuel}</p>
@@ -1931,48 +1943,28 @@ const CarLot = () => {
                   <p className="text-sm text-gray-500">Transmission</p>
                   <p className="font-semibold text-gray-900">{displayCar.transmission}</p>
                 </div>
-                <div className="border-b border-gray-200 pb-3">
-                  <p className="text-sm text-gray-500">Color</p>
-                  <p className="font-semibold text-gray-900">{displayCar.color}</p>
-                </div>
-                <div className="border-b border-gray-200 pb-3">
-                  <p className="text-sm text-gray-500">VIN</p>
-                  <p className="font-semibold text-gray-900 text-sm">{displayCar.vin}</p>
-                </div>
+                {displayCar.vin && (
+                  <div className="border-b border-gray-200 pb-3">
+                    <p className="text-sm text-gray-500">VIN</p>
+                    <p className="font-semibold text-gray-900 text-sm">{displayCar.vin}</p>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Description */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
-              <p className="text-gray-700 leading-relaxed">{displayCar.description}</p>
-            </div>
-
-            {/* Description (for external listings) */}
-            {isExternal && displayCar.description && (
+            {displayCar.description && (
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
-                <p className="text-gray-700 whitespace-pre-line">{displayCar.description}</p>
+                <p className="text-gray-700 whitespace-pre-line leading-relaxed">{displayCar.description}</p>
               </div>
             )}
 
-            {/* Additional Details (for external listings) */}
-            {isExternal && (
+            {/* Additional Specs (for external listings) */}
+            {isExternal && (displayCar.engine || displayCar.drivetrain || displayCar.mpgCity || displayCar.mpgHighway) && (
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Additional Details</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Additional Specifications</h2>
                 <div className="grid grid-cols-2 gap-4">
-                  {displayCar.exteriorColor && (
-                    <div className="border-b border-gray-200 pb-3">
-                      <p className="text-sm text-gray-500">Exterior Color</p>
-                      <p className="font-semibold text-gray-900">{displayCar.exteriorColor}</p>
-                    </div>
-                  )}
-                  {displayCar.interiorColor && (
-                    <div className="border-b border-gray-200 pb-3">
-                      <p className="text-sm text-gray-500">Interior Color</p>
-                      <p className="font-semibold text-gray-900">{displayCar.interiorColor}</p>
-                    </div>
-                  )}
                   {displayCar.engine && (
                     <div className="border-b border-gray-200 pb-3">
                       <p className="text-sm text-gray-500">Engine</p>
