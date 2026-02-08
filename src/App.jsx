@@ -423,7 +423,7 @@ const CarLot = () => {
       
       if (make) url += `&make=${encodeURIComponent(make)}`;
       if (model) url += `&model=${encodeURIComponent(model)}`;
-      if (zip) url += `&zip=${zip}`;
+      // Only use latitude/longitude, not zip (API doesn't support both)
       if (latitude && longitude) url += `&latitude=${latitude}&longitude=${longitude}`;
       if (radius) url += `&radius=${radius}`;
       if (priceMax) url += `&price_max=${priceMax}`;
