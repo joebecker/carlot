@@ -173,7 +173,7 @@ const CarLot = () => {
     } else if (path === '/admin') {
       setCurrentView('admin');
     }
-  }, [window.location.pathname]);
+  }, []);
 
   // Update URL when currentView changes
   useEffect(() => {
@@ -191,8 +191,7 @@ const CarLot = () => {
         navigate(`/cars/${viewingCarId}/${createCarSlug(selectedCar)}`, { replace: true });
       }
     }
-  }, [currentView, viewingCarId, selectedCar]);
-      return;
+  }, [currentView, viewingCarId, selectedCar, navigate]);
     }
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
